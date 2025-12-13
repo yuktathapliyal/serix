@@ -6,11 +6,23 @@ import random
 import time
 from abc import ABC, abstractmethod
 
+import httpx
 from openai import APIError, RateLimitError
 from openai.types.chat import ChatCompletion
 from rich.console import Console
 
 console = Console()
+
+
+def _create_mock_request() -> httpx.Request:
+    """Create a mock request for injected errors."""
+    return httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+
+
+def _create_mock_response(status_code: int) -> httpx.Response:
+    """Create a mock response for injected errors."""
+    request = _create_mock_request()
+    return httpx.Response(status_code=status_code, request=request)
 
 
 class Mutation(ABC):
@@ -80,13 +92,13 @@ class ErrorMutation(Mutation):
         if error_code == 429:
             raise RateLimitError(
                 message="Rate limit exceeded (injected by Serix)",
-                response=None,  # type: ignore
+                response=_create_mock_response(429),
                 body={"error": {"message": "Rate limit exceeded"}},
             )
         else:
             raise APIError(
-                message="Internal server error (injected by Serix)",
-                request=None,  # type: ignore
+                message=f"HTTP {error_code} (injected by Serix)",
+                request=_create_mock_request(),
                 body={"error": {"message": f"HTTP {error_code}"}},
             )
 
