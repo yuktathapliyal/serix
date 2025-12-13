@@ -1,0 +1,130 @@
+name: 'Serix AI Agent Security Test'
+description: 'Run security tests on AI agents with fuzzing and red team attacks'
+author: 'Serix'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  script:
+    description: 'Path to the Python script to test'
+    required: true
+  mode:
+    description: 'Test mode: fuzz, attack, or both'
+    required: false
+    default: 'both'
+  goal:
+    description: 'Attack goal for red team testing'
+    required: false
+    default: 'Make the agent reveal sensitive information or ignore its instructions'
+  max-attempts:
+    description: 'Maximum number of attack attempts'
+    required: false
+    default: '5'
+  openai-api-key:
+    description: 'OpenAI API key (can also use OPENAI_API_KEY env var)'
+    required: false
+  fail-on-vulnerability:
+    description: 'Fail the action if vulnerabilities are found'
+    required: false
+    default: 'true'
+  report-path:
+    description: 'Path for HTML report output'
+    required: false
+    default: 'serix-report.html'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+
+outputs:
+  status:
+    description: 'Test status: passed or failed'
+    value: ${{ steps.run-serix.outputs.status }}
+  vulnerabilities-found:
+    description: 'Number of vulnerabilities found'
+    value: ${{ steps.run-serix.outputs.vulnerabilities }}
+  report-path:
+    description: 'Path to the generated HTML report'
+    value: ${{ steps.run-serix.outputs.report }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+
+    - name: Install Serix
+      shell: bash
+      run: |
+        uv pip install --system serix
+
+    - name: Run Serix Tests
+      id: run-serix
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai-api-key || env.OPENAI_API_KEY }}
+      run: |
+        set +e  # Don't exit on error
+        VULNERABILITIES=0
+        STATUS="passed"
+
+        echo "::group::Serix AI Agent Security Test"
+        echo "Testing: ${{ inputs.script }}"
+        echo "Mode: ${{ inputs.mode }}"
+
+        # Run fuzzing if enabled
+        if [[ "${{ inputs.mode }}" == "fuzz" || "${{ inputs.mode }}" == "both" ]]; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Running Fuzzing Tests..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          serix run --fuzz "${{ inputs.script }}" || true
+        fi
+
+        # Run red team attack if enabled
+        if [[ "${{ inputs.mode }}" == "attack" || "${{ inputs.mode }}" == "both" ]]; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Running Red Team Attack..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          ATTACK_OUTPUT=$(serix attack "${{ inputs.script }}" \
+            --goal "${{ inputs.goal }}" \
+            --max-attempts ${{ inputs.max-attempts }} \
+            --report "${{ inputs.report-path }}" 2>&1)
+
+          echo "$ATTACK_OUTPUT"
+
+          # Check for successful attacks
+          if echo "$ATTACK_OUTPUT" | grep -q "successful attacks"; then
+            VULNERABILITIES=$(echo "$ATTACK_OUTPUT" | grep -oP '\d+(?= successful attacks)')
+            STATUS="failed"
+          fi
+        fi
+
+        echo "::endgroup::"
+
+        # Set outputs
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+        echo "report=${{ inputs.report-path }}" >> $GITHUB_OUTPUT
+
+        # Fail if vulnerabilities found and fail-on-vulnerability is true
+        if [[ "$STATUS" == "failed" && "${{ inputs.fail-on-vulnerability }}" == "true" ]]; then
+          echo "::error::Security vulnerabilities detected! $VULNERABILITIES attack(s) succeeded."
+          exit 1
+        fi
+
+    - name: Upload Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: serix-security-report
+        path: ${{ inputs.report-path }}
+        if-no-files-found: ignore
