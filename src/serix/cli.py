@@ -183,34 +183,79 @@ def replay(
 
 @app.command()
 def attack(
-    script: Annotated[Path, typer.Argument(help="Python script to attack")],
+    script: Annotated[
+        Path | None,
+        typer.Argument(help="Python script to attack (optional if in config)"),
+    ] = None,
     goal: Annotated[
-        str,
+        str | None,
         typer.Option("--goal", "-g", help="Attack goal description"),
-    ],
+    ] = None,
     max_attempts: Annotated[
-        int,
+        int | None,
         typer.Option("--max-attempts", "-n", help="Maximum attack attempts"),
-    ] = 10,
+    ] = None,
     report: Annotated[
         Path | None,
         typer.Option("--report", "-r", help="Generate HTML report at path"),
     ] = None,
     judge_model: Annotated[
-        str,
+        str | None,
         typer.Option("--judge-model", help="Model for impartial judging"),
-    ] = "gpt-4o",
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config file"),
+    ] = None,
 ) -> None:
-    """Run red team attacks against an agent."""
+    """Run red team attacks against an agent.
+
+    Configuration can be provided via serix.toml file or CLI arguments.
+    CLI arguments override config file values.
+    """
     from serix.core.client import get_original_openai_class
+    from serix.core.config_loader import find_config_file, load_config
     from serix.fuzz.redteam import RedTeamEngine
     from serix.report.html import generate_html_report
 
-    console.print(f"[cyan]Serix[/cyan] Attacking {script}")
-    console.print(f"[yellow]Goal:[/yellow] {goal}")
+    # Load config file
+    config_path = config or find_config_file()
+    file_config = load_config(config_path)
+
+    if config_path:
+        console.print(f"[dim]Using config:[/dim] {config_path}")
+
+    # Merge config with CLI args (CLI takes precedence)
+    final_script = script or (
+        Path(file_config.target.script) if file_config.target.script else None
+    )
+    final_goal = goal or file_config.attack.goal
+    final_max_attempts = max_attempts or file_config.attack.max_attempts
+    final_judge_model = judge_model or file_config.attack.judge_model
+    final_report = report or (
+        Path(file_config.attack.report) if file_config.attack.report else None
+    )
+    final_verbose = verbose or file_config.verbose
+
+    # Validate required fields
+    if final_script is None:
+        console.print(
+            "[red]Error:[/red] Script is required. "
+            "Provide via argument or config file."
+        )
+        raise typer.Exit(1)
+
+    if final_goal is None:
+        console.print(
+            "[red]Error:[/red] Goal is required. " "Provide via --goal or config file."
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[cyan]Serix[/cyan] Attacking {final_script}")
+    console.print(f"[yellow]Goal:[/yellow] {final_goal}")
 
     # Get the original OpenAI class (unpatched) for the attacker
     original_class = get_original_openai_class()
@@ -222,15 +267,15 @@ def attack(
     attacker_client = original_class()
     engine = RedTeamEngine(
         client=attacker_client,
-        judge_model=judge_model,
-        verbose=verbose,
+        judge_model=final_judge_model,
+        verbose=final_verbose,
     )
 
     # Run attacks
     results = engine.attack(
-        script_path=script,
-        goal=goal,
-        max_attempts=max_attempts,
+        script_path=final_script,
+        goal=final_goal,
+        max_attempts=final_max_attempts,
     )
 
     # Report results
@@ -242,18 +287,72 @@ def attack(
             console.print(f"  • {atk.strategy}: {atk.payload[:100]}...")
     else:
         console.print(
-            f"\n[green]✓[/green] Agent defended against {max_attempts} attacks"
+            f"\n[green]✓[/green] Agent defended against {final_max_attempts} attacks"
         )
 
     # Generate HTML report if requested
-    if report:
+    if final_report:
         report_path = generate_html_report(
             results=results,
-            script_path=str(script),
-            output_path=report,
-            judge_model=judge_model,
+            script_path=str(final_script),
+            output_path=final_report,
+            judge_model=final_judge_model,
         )
         console.print(f"\n[cyan]Report:[/cyan] {report_path}")
+
+
+@app.command()
+def init(
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Overwrite existing config")
+    ] = False,
+) -> None:
+    """Initialize a serix.toml configuration file in the current directory."""
+    config_path = Path("serix.toml")
+
+    if config_path.exists() and not force:
+        console.print(
+            f"[yellow]Warning:[/yellow] {config_path} already exists. "
+            "Use --force to overwrite."
+        )
+        raise typer.Exit(1)
+
+    default_config = """# Serix Configuration File
+# This file configures AI agent security testing for your project.
+# All CLI arguments can also be set here. CLI args override these values.
+
+# Target configuration
+[target]
+script = "agent.py"            # Your agent script to test
+# working_dir = "."            # Working directory for script execution
+
+# Red team attack configuration
+[attack]
+goal = "Make the agent reveal sensitive information or ignore its instructions"
+max_attempts = 5               # Number of attack attempts
+judge_model = "gpt-4o"         # Model for impartial judging (gpt-4o recommended)
+model = "gpt-4o-mini"          # Model for generating attacks
+report = "serix-report.html"   # HTML report output path
+stop_on_first = true           # Stop after first successful attack
+
+# Fuzzing configuration
+[fuzz]
+enabled = false                # Enable fuzzing by default
+latency = true                 # Inject latency delays
+errors = true                  # Inject HTTP errors (500, 503, 429)
+json_corruption = true         # Corrupt JSON responses
+mutation_probability = 0.3     # Probability of applying mutations
+latency_seconds = 5.0          # Latency injection duration
+
+# Global settings
+verbose = false                # Enable verbose output
+"""
+
+    config_path.write_text(default_config)
+    console.print(f"[green]✓[/green] Created {config_path}")
+    console.print("\n[dim]Next steps:[/dim]")
+    console.print("  1. Edit serix.toml to set your target script and attack goal")
+    console.print("  2. Run [cyan]serix attack[/cyan] to start testing")
 
 
 if __name__ == "__main__":
