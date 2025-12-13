@@ -38,7 +38,7 @@ def run_agent() -> None:
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        #model="gpt-5-nano",
+        # model="gpt-5-nano",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from openai.types.chat import ChatCompletion
 from rich.console import Console
@@ -75,7 +74,9 @@ class FuzzEngine:
                     result.mutations_applied.append(mutation.name)
                 except Exception as e:
                     # Error mutation raises instead of returning
-                    console.print(f"[red]⚡ FUZZ:[/red] {mutation.name} injected error!")
+                    console.print(
+                        f"[red]⚡ FUZZ:[/red] {mutation.name} injected error!"
+                    )
                     result.error_raised = e
                     result.mutations_applied.append(mutation.name)
                     break  # Stop applying more mutations after error

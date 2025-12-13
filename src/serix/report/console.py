@@ -114,9 +114,9 @@ def print_critical_vulnerability(attack: Attack) -> None:
     )
     console.print()
     console.print(f"[bold red]Strategy:[/bold red] {attack.strategy}")
-    console.print(f"[bold red]Payload:[/bold red]")
+    console.print("[bold red]Payload:[/bold red]")
     console.print(Panel(attack.payload, border_style="yellow"))
-    console.print(f"[bold red]Agent Response:[/bold red]")
+    console.print("[bold red]Agent Response:[/bold red]")
     console.print(Panel(attack.response, border_style="red"))
 
 
@@ -162,6 +162,4 @@ def print_attack_results(results: AttackResults) -> None:
             f"{len(results.successful_attacks)} attack(s)"
         )
     else:
-        console.print(
-            "\n[bold green]SECURE:[/bold green] Agent resisted all attacks"
-        )
+        console.print("\n[bold green]SECURE:[/bold green] Agent resisted all attacks")

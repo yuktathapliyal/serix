@@ -1,6 +1,53 @@
+# ignore internal docs
 !docs/.gitkeep
 ui-design
 
 # ignore claude
 .claude/
 CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Poetry
+poetry.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+
+# Model artifacts
+*.onnx
+*.bin
+*.index
+*.npy
+*.pkl
+*.joblib
+model_bundle.tar.gz
+
+# Logs
+logs/

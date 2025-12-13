@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import Any
 
 from openai import APIError, RateLimitError
 from openai.types.chat import ChatCompletion
@@ -76,9 +75,7 @@ class ErrorMutation(Mutation):
         error_code = random.choice(self.error_codes)
 
         if verbose:
-            console.print(
-                f"[yellow][FUZZ: ERROR][/yellow] Injecting HTTP {error_code}"
-            )
+            console.print(f"[yellow][FUZZ: ERROR][/yellow] Injecting HTTP {error_code}")
 
         if error_code == 429:
             raise RateLimitError(
@@ -88,7 +85,7 @@ class ErrorMutation(Mutation):
             )
         else:
             raise APIError(
-                message=f"Internal server error (injected by Serix)",
+                message="Internal server error (injected by Serix)",
                 request=None,  # type: ignore
                 body={"error": {"message": f"HTTP {error_code}"}},
             )
@@ -119,9 +116,7 @@ class JsonCorruptionMutation(Mutation):
         strategy = random.choice(self.corruption_strategies)
 
         if verbose:
-            console.print(
-                f"[yellow][FUZZ: JSON][/yellow] Applying {strategy.__name__}"
-            )
+            console.print(f"[yellow][FUZZ: JSON][/yellow] Applying {strategy.__name__}")
 
         return strategy(response)
 

@@ -68,9 +68,7 @@ def _run_script(script_path: Path) -> None:
 @app.command()
 def run(
     script: Annotated[Path, typer.Argument(help="Python script to run")],
-    fuzz: Annotated[
-        bool, typer.Option("--fuzz", help="Enable fuzzing mode")
-    ] = False,
+    fuzz: Annotated[bool, typer.Option("--fuzz", help="Enable fuzzing mode")] = False,
     fuzz_latency: Annotated[
         bool, typer.Option("--fuzz-latency", help="Inject latency")
     ] = False,
@@ -194,13 +192,22 @@ def attack(
         int,
         typer.Option("--max-attempts", "-n", help="Maximum attack attempts"),
     ] = 10,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", "-r", help="Generate HTML report at path"),
+    ] = None,
+    judge_model: Annotated[
+        str,
+        typer.Option("--judge-model", help="Model for impartial judging"),
+    ] = "gpt-4o",
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
 ) -> None:
     """Run red team attacks against an agent."""
-    from serix.fuzz.redteam import RedTeamEngine
     from serix.core.client import get_original_openai_class
+    from serix.fuzz.redteam import RedTeamEngine
+    from serix.report.html import generate_html_report
 
     console.print(f"[cyan]Serix[/cyan] Attacking {script}")
     console.print(f"[yellow]Goal:[/yellow] {goal}")
@@ -213,7 +220,11 @@ def attack(
 
     # Create red team engine with unpatched client
     attacker_client = original_class()
-    engine = RedTeamEngine(client=attacker_client, verbose=verbose)
+    engine = RedTeamEngine(
+        client=attacker_client,
+        judge_model=judge_model,
+        verbose=verbose,
+    )
 
     # Run attacks
     results = engine.attack(
@@ -227,10 +238,22 @@ def attack(
         console.print(
             f"\n[red]⚠️  {len(results.successful_attacks)} successful attacks![/red]"
         )
-        for attack in results.successful_attacks:
-            console.print(f"  • {attack.strategy}: {attack.payload[:100]}...")
+        for atk in results.successful_attacks:
+            console.print(f"  • {atk.strategy}: {atk.payload[:100]}...")
     else:
-        console.print(f"\n[green]✓[/green] Agent defended against {max_attempts} attacks")
+        console.print(
+            f"\n[green]✓[/green] Agent defended against {max_attempts} attacks"
+        )
+
+    # Generate HTML report if requested
+    if report:
+        report_path = generate_html_report(
+            results=results,
+            script_path=str(script),
+            output_path=report,
+            judge_model=judge_model,
+        )
+        console.print(f"\n[cyan]Report:[/cyan] {report_path}")
 
 
 if __name__ == "__main__":

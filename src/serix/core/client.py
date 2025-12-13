@@ -18,7 +18,7 @@ from serix.core.types import (
 )
 
 if TYPE_CHECKING:
-    from openai._types import NOT_GIVEN
+    pass
 
 console = Console()
 
@@ -70,7 +70,9 @@ class SerixChatCompletions:
         self._client = client
         # Access parent class's chat via descriptor protocol to avoid circular dependency
         # OpenAI.chat is a cached_property, so we use __get__ directly
-        self._original_completions = OpenAI.chat.__get__(client, type(client)).completions
+        self._original_completions = OpenAI.chat.__get__(
+            client, type(client)
+        ).completions
 
     def create(
         self,
@@ -96,7 +98,9 @@ class SerixChatCompletions:
 
         # Log interception
         if config and config.verbose:
-            console.print(f"[yellow][INTERCEPTED][/yellow] {model} - {len(messages)} messages")
+            console.print(
+                f"[yellow][INTERCEPTED][/yellow] {model} - {len(messages)} messages"
+            )
 
         # Build request record
         request = RecordedRequest(
