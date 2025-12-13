@@ -270,7 +270,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
                                     client = original()
                                     response = client.chat.completions.create(
                                         model=model,
-                                        messages=modified_messages,
+                                        messages=modified_messages,  # type: ignore[arg-type]
                                         **kwargs,
                                     )
                                     content = response.choices[0].message.content or ""
