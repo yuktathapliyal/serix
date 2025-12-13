@@ -51,3 +51,14 @@ model_bundle.tar.gz
 
 # Logs
 logs/
+
+
+# Generated reports
+*.html
+serix-report.html
+
+# Recordings
+recordings/
+
+# macOS
+.DS_Store
