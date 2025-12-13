@@ -100,7 +100,9 @@ def run(
     config = SerixConfig(mode=mode, fuzz=fuzz_config, verbose=verbose)
     set_serix_config(config)
 
-    console.print(f"[cyan]Serix[/cyan] Running {script} in {mode.value} mode")
+    console.print(
+        f"[bold violet]Serix[/bold violet] Running {script} in {mode.value} mode"
+    )
     _run_script(script)
 
 
@@ -123,7 +125,7 @@ def record(
     session = RecordingSession(script_path=str(script))
     set_recording_session(session)
 
-    console.print(f"[cyan]Serix[/cyan] Recording {script}...")
+    console.print(f"[bold violet]Serix[/bold violet] Recording {script}...")
 
     try:
         _run_script(script)
@@ -173,7 +175,7 @@ def replay(
     set_recording_session(session)
 
     console.print(
-        f"[cyan]Serix[/cyan] Replaying {script} with {len(session.interactions)} "
+        f"[bold violet]Serix[/bold violet] Replaying {script} with {len(session.interactions)} "
         f"recorded interactions"
     )
 
@@ -254,7 +256,7 @@ def attack(
         )
         raise typer.Exit(1)
 
-    console.print(f"[cyan]Serix[/cyan] Attacking {final_script}")
+    console.print(f"[bold violet]Serix[/bold violet] Attacking {final_script}")
     console.print(f"[yellow]Goal:[/yellow] {final_goal}")
 
     # Get the original OpenAI class (unpatched) for the attacker
