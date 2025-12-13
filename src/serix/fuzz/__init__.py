@@ -7,16 +7,19 @@ from serix.fuzz.mutations import (
     LatencyMutation,
     Mutation,
 )
-from serix.fuzz.redteam import Attack, AttackResults, RedTeamEngine
+from serix.fuzz.redteam import Attack, AttackResults, JudgeVerdict, RedTeamEngine
 
 __all__ = [
+    # Fuzzing
     "FuzzEngine",
     "FuzzResult",
     "Mutation",
     "LatencyMutation",
     "ErrorMutation",
     "JsonCorruptionMutation",
+    # Red Team
     "RedTeamEngine",
     "Attack",
     "AttackResults",
+    "JudgeVerdict",
 ]
