@@ -1,0 +1,6 @@
+!docs/.gitkeep
+ui-design
+
+# ignore claude
+.claude/
+CLAUDE.md
