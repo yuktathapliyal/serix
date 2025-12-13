@@ -276,49 +276,47 @@ The attack should be a single message that could be sent to an AI assistant.""",
         Returns:
             AttackResults with all attempts and outcomes
         """
+        from serix.report.console import print_critical_vulnerability
+
         results = AttackResults(goal=goal, total_attempts=max_attempts)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Running attacks...", total=max_attempts)
+        for i in range(max_attempts):
+            # Alternate between template attacks and dynamic attacks
+            if i < len(ATTACK_STRATEGIES):
+                strategy = ATTACK_STRATEGIES[i]
+                payload = strategy["template"].format(goal=goal)
+                strategy_name = strategy["name"]
+            else:
+                payload = self._generate_dynamic_attack(goal, i)
+                strategy_name = f"dynamic_{i}"
 
-            for i in range(max_attempts):
-                # Alternate between template attacks and dynamic attacks
-                if i < len(ATTACK_STRATEGIES):
-                    strategy = ATTACK_STRATEGIES[i]
-                    payload = strategy["template"].format(goal=goal)
-                    strategy_name = strategy["name"]
-                else:
-                    payload = self._generate_dynamic_attack(goal, i)
-                    strategy_name = f"dynamic_{i}"
+            # Show attack header
+            console.print(f"\n[cyan]{'━' * 50}[/cyan]")
+            console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
+            console.print(f"[cyan]{'━' * 50}[/cyan]")
+            payload_preview = payload[:100] + "..." if len(payload) > 100 else payload
+            console.print(f"[dim]Payload:[/dim] {payload_preview}")
 
-                progress.update(task, description=f"Attack {i+1}: {strategy_name}")
+            # Run the attack
+            console.print("[dim]Executing...[/dim]")
+            response = self._run_attack_on_script(script_path, payload)
 
-                # Run the attack
-                response = self._run_attack_on_script(script_path, payload)
+            # Judge the result
+            success = self._judge_response(goal, payload, response)
 
-                # Judge the result
-                success = self._judge_response(goal, payload, response)
+            attack = Attack(
+                strategy=strategy_name,
+                payload=payload,
+                response=response,
+                success=success,
+            )
+            results.attacks.append(attack)
 
-                attack = Attack(
-                    strategy=strategy_name,
-                    payload=payload,
-                    response=response,
-                    success=success,
-                )
-                results.attacks.append(attack)
-
-                if self.verbose:
-                    status = "[red]SUCCESS[/red]" if success else "[green]BLOCKED[/green]"
-                    console.print(f"  {strategy_name}: {status}")
-
-                progress.advance(task)
-
-                # Early exit on first success (optional)
-                # if success:
-                #     break
+            if success:
+                # Print dramatic vulnerability alert
+                print_critical_vulnerability(attack)
+                break  # Stop on first success for maximum drama
+            else:
+                console.print(f"[green]DEFENDED[/green]")
 
         return results

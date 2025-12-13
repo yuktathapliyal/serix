@@ -65,6 +65,8 @@ class FuzzEngine:
 
         for mutation in self.mutations:
             if mutation.should_apply(self.config.mutation_probability):
+                # Show visible feedback when mutation is applied
+                console.print(f"[yellow]⚡ FUZZ:[/yellow] Applying {mutation.name}...")
                 try:
                     result.mutated_response = mutation.apply(
                         result.mutated_response,  # type: ignore
@@ -73,6 +75,7 @@ class FuzzEngine:
                     result.mutations_applied.append(mutation.name)
                 except Exception as e:
                     # Error mutation raises instead of returning
+                    console.print(f"[red]⚡ FUZZ:[/red] {mutation.name} injected error!")
                     result.error_raised = e
                     result.mutations_applied.append(mutation.name)
                     break  # Stop applying more mutations after error

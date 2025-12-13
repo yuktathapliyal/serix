@@ -131,6 +131,21 @@ class SerixChatCompletions:
         if config and config.mode == SerixMode.RECORD and session:
             self._record_interaction(request, response, latency_ms)
 
+        # Apply fuzzing mutations if in FUZZ mode
+        if config and config.mode == SerixMode.FUZZ and config.fuzz:
+            from serix.fuzz.engine import FuzzEngine
+
+            engine = FuzzEngine(config.fuzz, verbose=config.verbose)
+            fuzz_result = engine.maybe_mutate(response)
+
+            # Re-raise any injected errors
+            if fuzz_result.error_raised:
+                raise fuzz_result.error_raised
+
+            # Return mutated response
+            if fuzz_result.mutated_response:
+                return fuzz_result.mutated_response
+
         return response
 
     def _handle_replay(self, request: RecordedRequest) -> ChatCompletion:
