@@ -166,7 +166,8 @@ class SerixChatCompletions:
         interaction = session.interactions[_replay_index]
         _replay_index += 1
 
-        if get_serix_config() and get_serix_config().verbose:
+        config = get_serix_config()
+        if config and config.verbose:
             console.print(
                 f"[cyan][REPLAY {interaction.index}][/cyan] "
                 f"Returning cached response"
@@ -197,7 +198,8 @@ class SerixChatCompletions:
 
         session.add_interaction(request, recorded_response, latency_ms)
 
-        if get_serix_config() and get_serix_config().verbose:
+        config = get_serix_config()
+        if config and config.verbose:
             console.print(
                 f"[green][RECORDED {len(session.interactions) - 1}][/green] "
                 f"{latency_ms:.0f}ms"
@@ -207,7 +209,7 @@ class SerixChatCompletions:
 class SerixChat:
     """Wrapper for the chat namespace."""
 
-    def __init__(self, client: OpenAI) -> None:
+    def __init__(self, client: "SerixClient") -> None:
         self.completions = SerixChatCompletions(client)
 
 

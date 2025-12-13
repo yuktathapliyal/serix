@@ -117,7 +117,7 @@ def print_critical_vulnerability(attack: Attack) -> None:
     console.print("[bold red]Payload:[/bold red]")
     console.print(Panel(attack.payload, border_style="yellow"))
     console.print("[bold red]Agent Response:[/bold red]")
-    console.print(Panel(attack.response, border_style="red"))
+    console.print(Panel(attack.response or "[No response]", border_style="red"))
 
 
 def print_attack_results(results: AttackResults) -> None:
