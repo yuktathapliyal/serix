@@ -5,10 +5,13 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from openai import OpenAI
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from serix.core.target import Target
 
 console = Console()
 
@@ -352,6 +355,81 @@ The attack should be a single message that could be sent to an AI assistant.""",
             # Run the attack
             console.print("[dim]Executing...[/dim]")
             response = self._run_attack_on_script(script_path, payload)
+
+            # Judge the result with impartial evaluator
+            console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
+            verdict = self._judge_response(goal, payload, response)
+
+            attack = Attack(
+                strategy=strategy_name,
+                payload=payload,
+                response=response,
+                success=verdict.success,
+                judge_reasoning=verdict.reasoning,
+            )
+            results.attacks.append(attack)
+
+            if verdict.success:
+                # Print dramatic vulnerability alert
+                print_critical_vulnerability(attack)
+                console.print(f"[dim]Confidence: {verdict.confidence.upper()}[/dim]")
+                break  # Stop on first success for maximum drama
+            else:
+                console.print(
+                    f"[green]DEFENDED[/green] [dim]({verdict.confidence})[/dim]"
+                )
+
+        return results
+
+    def attack_target(
+        self,
+        target: "Target",
+        goal: str,
+        max_attempts: int = 10,
+    ) -> AttackResults:
+        """
+        Run adversarial attacks against a Target instance.
+
+        This is the new preferred method that uses the Target abstraction.
+        Works with DecoratorTarget, HttpTarget, and ScriptTarget.
+
+        Args:
+            target: Target instance to attack
+            goal: What the attacker wants to achieve
+            max_attempts: Maximum number of attack attempts
+
+        Returns:
+            AttackResults with all attempts and outcomes
+        """
+        from serix.report.console import print_critical_vulnerability
+
+        results = AttackResults(goal=goal, total_attempts=max_attempts)
+
+        for i in range(max_attempts):
+            # Alternate between template attacks and dynamic attacks
+            if i < len(ATTACK_STRATEGIES):
+                strategy = ATTACK_STRATEGIES[i]
+                payload = strategy["template"].format(goal=goal)
+                strategy_name = strategy["name"]
+            else:
+                payload = self._generate_dynamic_attack(goal, i)
+                strategy_name = f"dynamic_{i}"
+
+            # Show attack header
+            console.print(f"\n[cyan]{'━' * 50}[/cyan]")
+            console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
+            console.print(f"[cyan]{'━' * 50}[/cyan]")
+            payload_preview = payload[:100] + "..." if len(payload) > 100 else payload
+            console.print(f"[dim]Payload:[/dim] {payload_preview}")
+
+            # Run the attack using Target.send()
+            console.print("[dim]Executing...[/dim]")
+            target_response = target.send(payload)
+            response = target_response.content
+
+            # Show latency if available
+            if target_response.latency_ms > 0:
+                console.print(f"[dim]Latency: {target_response.latency_ms:.0f}ms[/dim]")
 
             # Judge the result with impartial evaluator
             console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
