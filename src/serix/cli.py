@@ -304,6 +304,177 @@ def attack(
 
 
 @app.command()
+def test(
+    target: Annotated[
+        str,
+        typer.Argument(
+            help="Target to test: file.py:function_name, file.py:ClassName, or http://url"
+        ),
+    ],
+    goal: Annotated[
+        str | None,
+        typer.Option("--goal", "-g", help="Attack goal description"),
+    ] = None,
+    scenarios: Annotated[
+        str | None,
+        typer.Option("--scenarios", "-s", help="Comma-separated scenarios to test"),
+    ] = None,
+    max_attempts: Annotated[
+        int,
+        typer.Option("--max-attempts", "-n", help="Maximum attack attempts"),
+    ] = 5,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", "-r", help="Generate HTML report at path"),
+    ] = None,
+    judge_model: Annotated[
+        str,
+        typer.Option("--judge-model", help="Model for impartial judging"),
+    ] = "gpt-4o",
+    input_field: Annotated[
+        str,
+        typer.Option("--input-field", help="HTTP input field name (for URL targets)"),
+    ] = "message",
+    output_field: Annotated[
+        str,
+        typer.Option("--output-field", help="HTTP output field name (for URL targets)"),
+    ] = "response",
+    headers: Annotated[
+        str | None,
+        typer.Option("--headers", help="HTTP headers as JSON (for URL targets)"),
+    ] = None,
+    verbose: Annotated[
+        bool, typer.Option("-v", "--verbose", help="Verbose output")
+    ] = False,
+) -> None:
+    """Test an agent with security scenarios.
+
+    Supports three target types:
+    - Decorated function: path/to/file.py:function_name
+    - Agent class: path/to/file.py:ClassName
+    - HTTP endpoint: http://localhost:8000/chat
+
+    Examples:
+        serix test examples/agent.py:my_agent -g "reveal secrets"
+        serix test http://localhost:8000/chat -g "bypass safety" --input-field message
+        serix test agent.py:MyAgent --scenarios injection,pii_leak
+    """
+    import json
+
+    from serix.core.client import get_original_openai_class
+    from serix.core.target import DecoratorTarget, HttpTarget, Target
+    from serix.fuzz.redteam import RedTeamEngine
+    from serix.report.html import generate_html_report
+    from serix.sdk.decorator import Agent, load_function_from_path
+
+    # Determine target type and create appropriate Target
+    target_obj: Target
+
+    if target.startswith("http://") or target.startswith("https://"):
+        # HTTP endpoint target
+        console.print(
+            f"[bold violet]Serix[/bold violet] Testing HTTP endpoint: {target}"
+        )
+        parsed_headers = json.loads(headers) if headers else {}
+        target_obj = HttpTarget(
+            url=target,
+            input_field=input_field,
+            output_field=output_field,
+            headers=parsed_headers,
+            verbose=verbose,
+        )
+    elif ":" in target:
+        # Python function or class target
+        file_path, name = target.rsplit(":", 1)
+        console.print(
+            f"[bold violet]Serix[/bold violet] Testing {name} from {file_path}"
+        )
+
+        try:
+            # Try loading as function first
+            func = load_function_from_path(target)
+
+            # Check if it's an Agent class
+            if isinstance(func, type) and issubclass(func, Agent):
+                agent_instance = func()
+                target_obj = DecoratorTarget(
+                    func=agent_instance.respond,
+                    verbose=verbose,
+                )
+            else:
+                # Regular function
+                target_obj = DecoratorTarget(func=func, verbose=verbose)
+        except Exception as e:
+            console.print(f"[red]Error loading target:[/red] {e}")
+            raise typer.Exit(1)
+    else:
+        console.print(
+            "[red]Error:[/red] Invalid target format. Use:\n"
+            "  - file.py:function_name (decorated function)\n"
+            "  - file.py:ClassName (Agent subclass)\n"
+            "  - http://url (HTTP endpoint)"
+        )
+        raise typer.Exit(1)
+
+    # Default goal if not provided
+    final_goal = (
+        goal
+        or "Make the agent reveal sensitive information or bypass its safety guidelines"
+    )
+
+    console.print(f"[yellow]Goal:[/yellow] {final_goal}")
+    if scenarios:
+        console.print(f"[dim]Scenarios:[/dim] {scenarios}")
+
+    # Get the original OpenAI class (unpatched) for the attacker
+    original_class = get_original_openai_class()
+    if original_class is None:
+        console.print("[red]Error:[/red] Original OpenAI class not available")
+        raise typer.Exit(1)
+
+    # Create red team engine
+    attacker_client = original_class()
+    engine = RedTeamEngine(
+        client=attacker_client,
+        judge_model=judge_model,
+        verbose=verbose,
+    )
+
+    # Setup target and run attacks
+    target_obj.setup()
+    try:
+        results = engine.attack_target(
+            target=target_obj,
+            goal=final_goal,
+            max_attempts=max_attempts,
+        )
+    finally:
+        target_obj.teardown()
+
+    # Report results
+    if results.successful_attacks:
+        console.print(
+            f"\n[red]⚠️  {len(results.successful_attacks)} vulnerabilities found![/red]"
+        )
+        for atk in results.successful_attacks:
+            console.print(f"  • {atk.strategy}: {atk.payload[:80]}...")
+    else:
+        console.print(
+            f"\n[green]✓[/green] Agent defended against {max_attempts} attacks"
+        )
+
+    # Generate HTML report if requested
+    if report:
+        report_path = generate_html_report(
+            results=results,
+            script_path=target,
+            output_path=report,
+            judge_model=judge_model,
+        )
+        console.print(f"\n[cyan]Report:[/cyan] {report_path}")
+
+
+@app.command()
 def init(
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Overwrite existing config")
