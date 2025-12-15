@@ -369,6 +369,7 @@ def test(
 
     from serix.core.client import get_original_openai_class
     from serix.core.target import DecoratorTarget, HttpTarget, Target
+    from serix.eval import Evaluator, RemediationEngine
     from serix.fuzz.redteam import RedTeamEngine
     from serix.report.html import generate_html_report
     from serix.sdk.decorator import Agent, load_function_from_path
@@ -469,27 +470,84 @@ def test(
                 max_turns=max_turns,
             )
 
-            # Report adversary results
-            if adversary_result.success:
-                console.print(
-                    f"\n[red]⚠️  Vulnerability found! ({adversary_result.vulnerability_type})[/red]"
-                )
-                console.print(f"  • Persona: {adversary_result.persona_used}")
-                console.print(f"  • Turns: {adversary_result.turns_taken}")
-                console.print(f"  • Confidence: {adversary_result.confidence}")
-                if adversary_result.winning_payload:
-                    preview = adversary_result.winning_payload[:80] + "..."
-                    console.print(f"  • Winning payload: {preview}")
-            else:
-                console.print(
-                    f"\n[green]✓[/green] Agent defended against {adversary_result.turns_taken} adaptive attacks"
-                )
+            # Run evaluation on adversary result
+            evaluator = Evaluator(
+                client=attacker_client,
+                model="gpt-4o-mini",
+                verbose=verbose,
+            )
+            evaluation = evaluator.evaluate(adversary_result)
 
-            # Skip HTML report for now (would need adapter for AdversaryResult)
+            # Add remediations to vulnerabilities
+            remediation_engine = RemediationEngine()
+            for vuln in evaluation.vulnerabilities:
+                remediation = remediation_engine.get_remediation(
+                    vuln.type, vuln.evidence
+                )
+                vuln.remediation = remediation.description
+
+            # Display security scores
+            console.print("\n[cyan]━━━ Security Evaluation ━━━[/cyan]")
+            status_color = "green" if evaluation.passed else "red"
+            status_text = "PASSED" if evaluation.passed else "FAILED"
+            console.print(f"[{status_color}]Status: {status_text}[/{status_color}]")
+
+            console.print("\n[cyan]Scores:[/cyan]")
+            console.print(f"  Overall:        {evaluation.scores.overall}/100")
+            console.print(f"  Safety:         {evaluation.scores.safety}/100")
+            console.print(f"  Compliance:     {evaluation.scores.compliance}/100")
+            console.print(
+                f"  Info Leakage:   {evaluation.scores.information_leakage}/100"
+            )
+            console.print(f"  Role Adherence: {evaluation.scores.role_adherence}/100")
+
+            # Display vulnerabilities if any
+            if evaluation.vulnerabilities:
+                console.print(
+                    f"\n[red]Vulnerabilities Found ({len(evaluation.vulnerabilities)}):[/red]"
+                )
+                for vuln in evaluation.vulnerabilities:
+                    severity_color = {
+                        "critical": "red",
+                        "high": "yellow",
+                        "medium": "cyan",
+                        "low": "dim",
+                    }.get(vuln.severity, "white")
+                    console.print(
+                        f"  [{severity_color}][{vuln.severity.upper()}][/{severity_color}] "
+                        f"{vuln.type}: {vuln.description}"
+                    )
+
+            # Display attack details
+            console.print("\n[dim]Attack Details:[/dim]")
+            console.print(f"  • Persona: {adversary_result.persona_used}")
+            console.print(f"  • Turns: {adversary_result.turns_taken}")
+            console.print(f"  • Confidence: {adversary_result.confidence}")
+            if adversary_result.winning_payload:
+                preview = adversary_result.winning_payload[:80] + "..."
+                console.print(f"  • Winning payload: {preview}")
+
+            # Display remediations if vulnerabilities found
+            if evaluation.vulnerabilities:
+                console.print("\n[cyan]Recommended Remediations:[/cyan]")
+                remediations = remediation_engine.get_prioritized_remediations(
+                    evaluation.vulnerabilities
+                )
+                for i, rem in enumerate(remediations[:3], 1):  # Top 3
+                    console.print(f"  {i}. [bold]{rem.title}[/bold]")
+                    # Show first line of description
+                    first_line = rem.description.strip().split("\n")[0]
+                    console.print(f"     {first_line}")
+
+            # Skip HTML report for now (would need adapter for EvaluationResult)
             if report:
                 console.print(
                     "[yellow]Note: HTML reports not yet supported for adversary mode[/yellow]"
                 )
+
+            # Exit with appropriate code
+            if not evaluation.passed:
+                raise typer.Exit(code=1)
             return
 
         # Use original attack_target for non-scenario mode
