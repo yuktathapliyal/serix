@@ -12,6 +12,7 @@ from rich.console import Console
 
 if TYPE_CHECKING:
     from serix.core.target import Target
+    from serix.fuzz.adversary import AdversaryResult
 
 console = Console()
 
@@ -455,3 +456,63 @@ The attack should be a single message that could be sent to an AI assistant.""",
                 )
 
         return results
+
+    def attack_with_adversary(
+        self,
+        target: "Target",
+        goal: str,
+        scenarios: list[str] | None = None,
+        max_turns: int = 3,
+    ) -> "AdversaryResult":
+        """Run adaptive adversary attack using personas.
+
+        This is the new intelligent attack mode that uses Attack Personas
+        to generate adaptive, multi-turn attacks based on agent responses.
+
+        Args:
+            target: Target instance to attack
+            goal: What the attacker wants to achieve
+            scenarios: List of scenario names (e.g., ["jailbreak", "pii_leak"])
+                      If None, uses all personas
+            max_turns: Maximum turns per persona (default: 3 for token protection)
+
+        Returns:
+            AdversaryResult with attack outcome and conversation history
+        """
+        from serix.fuzz.adversary import AdversaryLoop
+        from serix.fuzz.personas import (
+            ConfuserPersona,
+            ExtractorPersona,
+            JailbreakerPersona,
+            ManipulatorPersona,
+        )
+        from serix.fuzz.scenarios import get_personas_for_scenarios
+
+        # Get personas based on scenarios
+        if scenarios:
+            personas = get_personas_for_scenarios(scenarios, self.client)
+        else:
+            # Default: use all personas
+            personas = [
+                JailbreakerPersona(self.client),
+                ExtractorPersona(self.client),
+                ConfuserPersona(self.client),
+                ManipulatorPersona(self.client),
+            ]
+
+        if not personas:
+            # Fallback to jailbreaker if no personas resolved
+            personas = [JailbreakerPersona(self.client)]
+
+        # Create adversary loop
+        loop = AdversaryLoop(
+            attacker_client=self.client,
+            personas=personas,
+            judge_model=self.judge_model,
+            critic_model=self.model,  # Use attacker model for critic
+            max_turns=max_turns,
+            verbose=self.verbose,
+        )
+
+        # Run attack
+        return loop.attack(target, goal)
