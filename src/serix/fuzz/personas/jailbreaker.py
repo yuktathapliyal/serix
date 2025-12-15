@@ -105,10 +105,11 @@ class JailbreakerPersona(AttackPersona):
     """
 
     # Order techniques by typical effectiveness
+    # Grandma exploit is first because emotional manipulation is highly effective
     TECHNIQUE_ORDER = [
+        "grandma_exploit",
         "dan",
         "developer_mode",
-        "grandma_exploit",
         "context_switch",
         "roleplay_bypass",
         "base64_injection",
@@ -179,7 +180,7 @@ OUTPUT FORMAT:
         Returns:
             Technique key to use
         """
-        # First turn: use DAN (highest success rate)
+        # First turn: use first technique in order (grandma exploit for emotional manipulation)
         if context.turn == 1:
             return self.TECHNIQUE_ORDER[0]
 
