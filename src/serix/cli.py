@@ -333,6 +333,14 @@ def test(
         Path | None,
         typer.Option("--report", "-r", help="Generate HTML report at path"),
     ] = None,
+    json_report: Annotated[
+        Path | None,
+        typer.Option("--json-report", "-j", help="Generate JSON report at path"),
+    ] = None,
+    github: Annotated[
+        bool,
+        typer.Option("--github", help="Write to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY"),
+    ] = False,
     judge_model: Annotated[
         str,
         typer.Option("--judge-model", help="Model for impartial judging"),
@@ -371,7 +379,9 @@ def test(
     from serix.core.target import DecoratorTarget, HttpTarget, Target
     from serix.eval import Evaluator, RemediationEngine
     from serix.fuzz.redteam import RedTeamEngine
-    from serix.report.html import generate_html_report
+    from serix.report.github import write_github_output
+    from serix.report.html import generate_evaluation_report, generate_html_report
+    from serix.report.json_export import export_json
     from serix.sdk.decorator import Agent, load_function_from_path
 
     # Determine target type and create appropriate Target
@@ -527,23 +537,51 @@ def test(
                 preview = adversary_result.winning_payload[:80] + "..."
                 console.print(f"  • Winning payload: {preview}")
 
-            # Display remediations if vulnerabilities found
+            # Generate remediations list (used for console display and reports)
+            report_remediations: list | None = None
             if evaluation.vulnerabilities:
-                console.print("\n[cyan]Recommended Remediations:[/cyan]")
-                remediations = remediation_engine.get_prioritized_remediations(
+                report_remediations = remediation_engine.get_prioritized_remediations(
                     evaluation.vulnerabilities
                 )
-                for i, rem in enumerate(remediations[:3], 1):  # Top 3
+
+                # Display remediations if vulnerabilities found
+                console.print("\n[cyan]Recommended Remediations:[/cyan]")
+                for i, rem in enumerate(report_remediations[:3], 1):  # Top 3
                     console.print(f"  {i}. [bold]{rem.title}[/bold]")
                     # Show first line of description
                     first_line = rem.description.strip().split("\n")[0]
                     console.print(f"     {first_line}")
 
-            # Skip HTML report for now (would need adapter for EvaluationResult)
+            # Generate HTML report if requested
             if report:
-                console.print(
-                    "[yellow]Note: HTML reports not yet supported for adversary mode[/yellow]"
+                report_path = generate_evaluation_report(
+                    evaluation=evaluation,
+                    adversary_result=adversary_result,
+                    target=target,
+                    output_path=report,
+                    remediations=report_remediations,
                 )
+                console.print(f"\n[cyan]HTML Report:[/cyan] {report_path}")
+
+            # Generate JSON report if requested
+            if json_report:
+                json_path = export_json(
+                    evaluation=evaluation,
+                    adversary_result=adversary_result,
+                    target=target,
+                    output_path=json_report,
+                    remediations=report_remediations,
+                )
+                console.print(f"[cyan]JSON Report:[/cyan] {json_path}")
+
+            # Write GitHub outputs if requested
+            if github:
+                if write_github_output(evaluation, target):
+                    console.print("[dim]GitHub outputs written[/dim]")
+                else:
+                    console.print(
+                        "[yellow]Note: Not running in GitHub Actions environment[/yellow]"
+                    )
 
             # Exit with appropriate code
             if not evaluation.passed:
