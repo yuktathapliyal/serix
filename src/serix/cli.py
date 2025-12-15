@@ -323,6 +323,12 @@ def test(
         int,
         typer.Option("--max-attempts", "-n", help="Maximum attack attempts"),
     ] = 5,
+    max_turns: Annotated[
+        int,
+        typer.Option(
+            "--max-turns", "-t", help="Maximum turns per persona (for --scenarios mode)"
+        ),
+    ] = 3,
     report: Annotated[
         Path | None,
         typer.Option("--report", "-r", help="Generate HTML report at path"),
@@ -402,8 +408,13 @@ def test(
                     verbose=verbose,
                 )
             else:
-                # Regular function
-                target_obj = DecoratorTarget(func=func, verbose=verbose)
+                # Regular function - cast to expected signature
+                from typing import Callable, cast
+
+                target_obj = DecoratorTarget(
+                    func=cast(Callable[[str], str], func),
+                    verbose=verbose,
+                )
         except Exception as e:
             console.print(f"[red]Error loading target:[/red] {e}")
             raise typer.Exit(1)
@@ -443,6 +454,45 @@ def test(
     # Setup target and run attacks
     target_obj.setup()
     try:
+        # Use adversary loop when scenarios are specified
+        if scenarios:
+            scenario_list = [s.strip() for s in scenarios.split(",")]
+            console.print(
+                f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
+            )
+            console.print(f"[dim]Max turns per persona: {max_turns}[/dim]")
+
+            adversary_result = engine.attack_with_adversary(
+                target=target_obj,
+                goal=final_goal,
+                scenarios=scenario_list,
+                max_turns=max_turns,
+            )
+
+            # Report adversary results
+            if adversary_result.success:
+                console.print(
+                    f"\n[red]⚠️  Vulnerability found! ({adversary_result.vulnerability_type})[/red]"
+                )
+                console.print(f"  • Persona: {adversary_result.persona_used}")
+                console.print(f"  • Turns: {adversary_result.turns_taken}")
+                console.print(f"  • Confidence: {adversary_result.confidence}")
+                if adversary_result.winning_payload:
+                    preview = adversary_result.winning_payload[:80] + "..."
+                    console.print(f"  • Winning payload: {preview}")
+            else:
+                console.print(
+                    f"\n[green]✓[/green] Agent defended against {adversary_result.turns_taken} adaptive attacks"
+                )
+
+            # Skip HTML report for now (would need adapter for AdversaryResult)
+            if report:
+                console.print(
+                    "[yellow]Note: HTML reports not yet supported for adversary mode[/yellow]"
+                )
+            return
+
+        # Use original attack_target for non-scenario mode
         results = engine.attack_target(
             target=target_obj,
             goal=final_goal,
@@ -451,7 +501,7 @@ def test(
     finally:
         target_obj.teardown()
 
-    # Report results
+    # Report results (for non-adversary mode)
     if results.successful_attacks:
         console.print(
             f"\n[red]⚠️  {len(results.successful_attacks)} vulnerabilities found![/red]"
