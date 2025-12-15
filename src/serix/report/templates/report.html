@@ -16,6 +16,7 @@
             --accent-red: #ef4444;
             --accent-green: #10b981;
             --accent-yellow: #f59e0b;
+            --accent-orange: #f97316;
             --accent-blue: #3b82f6;
             --accent-purple: #8b5cf6;
         }
@@ -168,7 +169,97 @@
         .stat-card .value.red { color: var(--accent-red); }
         .stat-card .value.green { color: var(--accent-green); }
         .stat-card .value.yellow { color: var(--accent-yellow); }
+        .stat-card .value.orange { color: var(--accent-orange); }
         .stat-card .value.blue { color: var(--accent-blue); }
+
+        /* Score Gauges */
+        .score-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .score-gauge {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-gauge.overall {
+            grid-column: 1 / -1;
+            flex-direction: row;
+            justify-content: center;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .score-gauge.overall {
+                flex-direction: column;
+            }
+        }
+
+        .gauge-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gauge-circle.large {
+            width: 160px;
+            height: 160px;
+        }
+
+        .gauge-circle::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--gauge-color, var(--accent-green)) calc(var(--score, 0) * 3.6deg),
+                var(--bg-hover) calc(var(--score, 0) * 3.6deg)
+            );
+            mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #fff calc(100% - 12px));
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #fff calc(100% - 12px));
+        }
+
+        .gauge-circle.large::before {
+            mask: radial-gradient(farthest-side, transparent calc(100% - 16px), #fff calc(100% - 16px));
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 16px), #fff calc(100% - 16px));
+        }
+
+        .gauge-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .gauge-circle.large .gauge-value {
+            font-size: 2.5rem;
+        }
+
+        .gauge-label {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .gauge-label.large {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
 
         /* Charts */
         .charts-section {
@@ -295,7 +386,7 @@
             color: var(--text-secondary);
         }
 
-        /* Attacks Table */
+        /* Section */
         .section {
             margin-bottom: 2rem;
         }
@@ -308,6 +399,119 @@
             gap: 0.5rem;
         }
 
+        /* Vulnerability Cards */
+        .vuln-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .vuln-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .vuln-card.severity-critical {
+            border-color: var(--accent-red);
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .vuln-card.severity-high {
+            border-color: var(--accent-orange);
+            border-left: 4px solid var(--accent-orange);
+        }
+
+        .vuln-card.severity-medium {
+            border-color: var(--accent-yellow);
+            border-left: 4px solid var(--accent-yellow);
+        }
+
+        .vuln-card.severity-low {
+            border-color: var(--accent-blue);
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .vuln-header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-hover);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .severity-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .severity-badge.critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+        }
+
+        .severity-badge.high {
+            background: rgba(249, 115, 22, 0.15);
+            color: var(--accent-orange);
+            border: 1px solid var(--accent-orange);
+        }
+
+        .severity-badge.medium {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-yellow);
+            border: 1px solid var(--accent-yellow);
+        }
+
+        .severity-badge.low {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .vuln-type {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .vuln-body {
+            padding: 1.5rem;
+        }
+
+        .vuln-description {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .vuln-evidence {
+            margin-top: 1rem;
+        }
+
+        .vuln-evidence summary {
+            cursor: pointer;
+            color: var(--accent-blue);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .vuln-evidence pre {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Attacks Table */
         .attacks-table {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -366,6 +570,177 @@
             text-overflow: ellipsis;
         }
 
+        /* Conversation Transcript */
+        .transcript-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .transcript-messages {
+            padding: 1.5rem;
+        }
+
+        .message-block {
+            margin-bottom: 1rem;
+        }
+
+        .message-block:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .message-label .role-attacker {
+            color: var(--accent-yellow);
+        }
+
+        .message-label .role-agent {
+            color: var(--accent-blue);
+        }
+
+        .message-content {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message-content.attacker {
+            border-left: 3px solid var(--accent-yellow);
+        }
+
+        .message-content.agent {
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        /* Remediation Cards */
+        .remediation-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .remediation-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .remediation-header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-hover);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .remediation-header h4 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .priority-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .remediation-body {
+            padding: 1.5rem;
+        }
+
+        .remediation-description {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            white-space: pre-line;
+        }
+
+        .code-block {
+            position: relative;
+            margin-top: 1rem;
+        }
+
+        .code-block pre {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .code-block code {
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--border);
+        }
+
+        .remediation-references {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .remediation-references h5 {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .remediation-references a {
+            display: block;
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .remediation-references a:hover {
+            text-decoration: underline;
+        }
+
+        /* Syntax Highlighting */
+        .hl-keyword { color: #c678dd; }
+        .hl-string { color: #98c379; }
+        .hl-comment { color: #5c6370; font-style: italic; }
+        .hl-function { color: #61afef; }
+        .hl-decorator { color: #e5c07b; }
+
         /* Attack Details */
         .attack-details {
             margin-top: 2rem;
@@ -420,69 +795,6 @@
 
         .attack-card-body {
             padding: 1.5rem;
-        }
-
-        .message-block {
-            margin-bottom: 1rem;
-        }
-
-        .message-block:last-child {
-            margin-bottom: 0;
-        }
-
-        .message-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .message-content {
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'SF Mono', 'Consolas', monospace;
-            font-size: 0.875rem;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .message-content.attack {
-            border-left: 3px solid var(--accent-yellow);
-        }
-
-        .message-content.response {
-            border-left: 3px solid var(--accent-blue);
-        }
-
-        .message-content.response.exploited {
-            border-left: 3px solid var(--accent-red);
-        }
-
-        /* Fuzz Results */
-        .fuzz-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .fuzz-stat {
-            background: var(--bg-hover);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        .fuzz-stat .value {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        .fuzz-stat .label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
         }
 
         /* Recording Summary */
@@ -553,6 +865,197 @@
                 Generated: {{ report.generated_at }}
             </div>
         </header>
+
+        {% if report.is_evaluation_report %}
+        {# ============================================================ #}
+        {# EVALUATION REPORT (Module 3+)                                 #}
+        {# ============================================================ #}
+
+        <!-- Status Banner -->
+        <div class="status-banner {{ 'failed' if not report.passed else 'passed' }}">
+            <div class="status-icon">
+                {% if not report.passed %}
+                &#10006;
+                {% else %}
+                &#10004;
+                {% endif %}
+            </div>
+            <div class="status-text">
+                <h2>Security Audit: {{ 'FAILED' if not report.passed else 'PASSED' }}</h2>
+                <p>{{ report.summary | truncate(200) }}</p>
+            </div>
+        </div>
+
+        <!-- Score Dashboard -->
+        <div class="score-dashboard">
+            <!-- Overall Score (large) -->
+            <div class="score-gauge overall">
+                {% set overall_color = 'var(--accent-green)' if report.overall_score >= 80 else ('var(--accent-yellow)' if report.overall_score >= 60 else ('var(--accent-orange)' if report.overall_score >= 40 else 'var(--accent-red)')) %}
+                <div class="gauge-circle large" style="--score: {{ report.overall_score }}; --gauge-color: {{ overall_color }};">
+                    <span class="gauge-value" style="color: {{ overall_color }}">{{ report.overall_score }}</span>
+                </div>
+                <div>
+                    <div class="gauge-label large">Overall Security Score</div>
+                    <div style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                        Target: {{ report.target }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Safety -->
+            {% set safety_color = 'var(--accent-green)' if report.safety_score >= 80 else ('var(--accent-yellow)' if report.safety_score >= 60 else ('var(--accent-orange)' if report.safety_score >= 40 else 'var(--accent-red)')) %}
+            <div class="score-gauge">
+                <div class="gauge-circle" style="--score: {{ report.safety_score }}; --gauge-color: {{ safety_color }};">
+                    <span class="gauge-value" style="color: {{ safety_color }}">{{ report.safety_score }}</span>
+                </div>
+                <div class="gauge-label">Safety</div>
+            </div>
+
+            <!-- Compliance -->
+            {% set compliance_color = 'var(--accent-green)' if report.compliance_score >= 80 else ('var(--accent-yellow)' if report.compliance_score >= 60 else ('var(--accent-orange)' if report.compliance_score >= 40 else 'var(--accent-red)')) %}
+            <div class="score-gauge">
+                <div class="gauge-circle" style="--score: {{ report.compliance_score }}; --gauge-color: {{ compliance_color }};">
+                    <span class="gauge-value" style="color: {{ compliance_color }}">{{ report.compliance_score }}</span>
+                </div>
+                <div class="gauge-label">Compliance</div>
+            </div>
+
+            <!-- Info Leakage -->
+            {% set info_color = 'var(--accent-green)' if report.info_leakage_score >= 80 else ('var(--accent-yellow)' if report.info_leakage_score >= 60 else ('var(--accent-orange)' if report.info_leakage_score >= 40 else 'var(--accent-red)')) %}
+            <div class="score-gauge">
+                <div class="gauge-circle" style="--score: {{ report.info_leakage_score }}; --gauge-color: {{ info_color }};">
+                    <span class="gauge-value" style="color: {{ info_color }}">{{ report.info_leakage_score }}</span>
+                </div>
+                <div class="gauge-label">Info Leakage Protection</div>
+            </div>
+
+            <!-- Role Adherence -->
+            {% set role_color = 'var(--accent-green)' if report.role_adherence_score >= 80 else ('var(--accent-yellow)' if report.role_adherence_score >= 60 else ('var(--accent-orange)' if report.role_adherence_score >= 40 else 'var(--accent-red)')) %}
+            <div class="score-gauge">
+                <div class="gauge-circle" style="--score: {{ report.role_adherence_score }}; --gauge-color: {{ role_color }};">
+                    <span class="gauge-value" style="color: {{ role_color }}">{{ report.role_adherence_score }}</span>
+                </div>
+                <div class="gauge-label">Role Adherence</div>
+            </div>
+        </div>
+
+        {% if report.vulnerabilities %}
+        <!-- Vulnerabilities -->
+        <div class="section">
+            <h3>Vulnerabilities Found ({{ report.vulnerabilities | length }})</h3>
+            <div class="vuln-grid">
+                {% for vuln in report.vulnerabilities %}
+                <div class="vuln-card severity-{{ vuln.severity }}">
+                    <div class="vuln-header">
+                        <span class="severity-badge {{ vuln.severity }}">{{ vuln.severity | upper }}</span>
+                        <span class="vuln-type">{{ vuln.type }}</span>
+                    </div>
+                    <div class="vuln-body">
+                        <p class="vuln-description">{{ vuln.description }}</p>
+                        {% if vuln.evidence %}
+                        <details class="vuln-evidence">
+                            <summary>View Evidence</summary>
+                            <pre>{{ vuln.evidence }}</pre>
+                        </details>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Attack Transcript -->
+        {% if report.conversation %}
+        <div class="section">
+            <h3>Attack Transcript</h3>
+            <div class="transcript-card">
+                <div class="transcript-messages">
+                    {% for msg in report.conversation %}
+                    <div class="message-block">
+                        <div class="message-label">
+                            <span class="role-{{ msg.role }}">{{ msg.role | upper }}</span>
+                            <span>Turn {{ loop.index // 2 + 1 if msg.role == 'attacker' else '' }}</span>
+                        </div>
+                        <div class="message-content {{ msg.role }}">{{ msg.content }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if report.remediations %}
+        <!-- Remediations -->
+        <div class="section">
+            <h3>Recommended Remediations</h3>
+            <div class="remediation-grid">
+                {% for rem in report.remediations %}
+                <div class="remediation-card">
+                    <div class="remediation-header">
+                        <h4>{{ rem.title }}</h4>
+                        <span class="priority-badge">Priority {{ rem.priority }}</span>
+                    </div>
+                    <div class="remediation-body">
+                        <p class="remediation-description">{{ rem.description }}</p>
+                        {% if rem.code_highlighted %}
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code>{{ rem.code_highlighted | safe }}</code></pre>
+                        </div>
+                        {% endif %}
+                        {% if rem.references %}
+                        <div class="remediation-references">
+                            <h5>References</h5>
+                            {% for ref in rem.references %}
+                            <a href="{{ ref }}" target="_blank" rel="noopener">{{ ref }}</a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Test Configuration -->
+        <div class="section">
+            <h3>Test Configuration</h3>
+            <div class="chart-card">
+                <table class="recording-table">
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                    </tr>
+                    <tr>
+                        <td>Target</td>
+                        <td>{{ report.target }}</td>
+                    </tr>
+                    <tr>
+                        <td>Attack Goal</td>
+                        <td>{{ report.goal }}</td>
+                    </tr>
+                    <tr>
+                        <td>Persona Used</td>
+                        <td>{{ report.persona_used }}</td>
+                    </tr>
+                    <tr>
+                        <td>Turns Taken</td>
+                        <td>{{ report.turns_taken }}</td>
+                    </tr>
+                    <tr>
+                        <td>Confidence</td>
+                        <td>{{ report.confidence | upper }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        {% else %}
+        {# ============================================================ #}
+        {# LEGACY ATTACK REPORT (Module 2)                               #}
+        {# ============================================================ #}
 
         <!-- Status Banner -->
         <div class="status-banner {{ 'failed' if report.overall_status == 'FAILED' else 'passed' }}">
@@ -688,11 +1191,11 @@
                 <div class="attack-card-body">
                     <div class="message-block">
                         <div class="message-label">Attack Payload</div>
-                        <div class="message-content attack">{{ attack.payload }}</div>
+                        <div class="message-content attacker">{{ attack.payload }}</div>
                     </div>
                     <div class="message-block">
                         <div class="message-label">Agent Response</div>
-                        <div class="message-content response {{ 'exploited' if attack.success else '' }}">{{ attack.response or '[No response]' }}</div>
+                        <div class="message-content agent {{ 'exploited' if attack.success else '' }}">{{ attack.response or '[No response]' }}</div>
                     </div>
                     {% if attack.judge_reasoning %}
                     <div class="message-block">
@@ -734,11 +1237,26 @@
             </div>
         </div>
 
+        {% endif %}
+
         <!-- Footer -->
         <footer class="footer">
             <p>Generated by <a href="https://github.com/serix-ai/serix">Serix</a> - AI Agent Security Testing Framework</p>
-            <p style="margin-top: 0.5rem;">Report Version 1.0</p>
+            <p style="margin-top: 0.5rem;">Report Version 2.0</p>
         </footer>
     </div>
+
+    <script>
+        function copyCode(btn) {
+            const codeBlock = btn.nextElementSibling;
+            const code = codeBlock.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>
