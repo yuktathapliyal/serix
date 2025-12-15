@@ -62,3 +62,7 @@ recordings/
 
 # macOS
 .DS_Store
+full-results.json
+results.json
+serix-results.json
+test-results.json
