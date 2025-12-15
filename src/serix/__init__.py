@@ -16,6 +16,16 @@ from serix.core.types import (
     SerixConfig,
     SerixMode,
 )
+from serix.eval import (
+    EvaluationResult,
+    EvaluationRubric,
+    EvaluationScore,
+    Evaluator,
+    RemediationEngine,
+    Severity,
+    Vulnerability,
+    VulnerabilityCategory,
+)
 from serix.fuzz.redteam import Attack, AttackResults, RedTeamEngine
 from serix.sdk.decorator import Agent, scan
 
@@ -45,4 +55,13 @@ __all__ = [
     "RedTeamEngine",
     "Attack",
     "AttackResults",
+    # Evaluation (Module 3)
+    "Evaluator",
+    "EvaluationResult",
+    "EvaluationScore",
+    "EvaluationRubric",
+    "RemediationEngine",
+    "Vulnerability",
+    "VulnerabilityCategory",
+    "Severity",
 ]
