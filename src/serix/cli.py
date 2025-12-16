@@ -341,6 +341,10 @@ def test(
         bool,
         typer.Option("--github", help="Write to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY"),
     ] = False,
+    live: Annotated[
+        bool,
+        typer.Option("--live", help="Enable live split-screen command center UI"),
+    ] = False,
     judge_model: Annotated[
         str,
         typer.Option("--judge-model", help="Model for impartial judging"),
@@ -468,33 +472,93 @@ def test(
         # Use adversary loop when scenarios are specified
         if scenarios:
             scenario_list = [s.strip() for s in scenarios.split(",")]
-            console.print(
-                f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
-            )
-            console.print(f"[dim]Max turns per persona: {max_turns}[/dim]")
 
-            adversary_result = engine.attack_with_adversary(
-                target=target_obj,
-                goal=final_goal,
-                scenarios=scenario_list,
-                max_turns=max_turns,
-            )
+            if live:
+                # Live split-screen command center UI
+                import time
 
-            # Run evaluation on adversary result
-            evaluator = Evaluator(
-                client=attacker_client,
-                model="gpt-4o-mini",
-                verbose=verbose,
-            )
-            evaluation = evaluator.evaluate(adversary_result)
+                from serix.report.live_ui import LiveAttackUI
 
-            # Add remediations to vulnerabilities
-            remediation_engine = RemediationEngine()
-            for vuln in evaluation.vulnerabilities:
-                remediation = remediation_engine.get_remediation(
-                    vuln.type, vuln.evidence
+                scenario_name = scenario_list[0] if scenario_list else "attack"
+                target_name = target.split(":")[-1] if ":" in target else target
+
+                with LiveAttackUI(target_name, scenario_name, max_turns) as ui:
+                    ui.update_status("ATTACKING")
+
+                    # Run attack with UI callbacks
+                    adversary_result = engine.attack_with_adversary(
+                        target=target_obj,
+                        goal=final_goal,
+                        scenarios=scenario_list,
+                        max_turns=max_turns,
+                        on_turn=ui.update_turn,
+                        on_attack=ui.update_attacker_message,
+                        on_response=ui.update_agent_response,
+                        on_critic=ui.update_critic,
+                    )
+
+                    # Update UI with evaluation
+                    ui.update_status("EVALUATING")
+
+                    # Run evaluation
+                    evaluator = Evaluator(
+                        client=attacker_client,
+                        model="gpt-4o-mini",
+                        verbose=verbose,
+                    )
+                    evaluation = evaluator.evaluate(adversary_result)
+
+                    # Update scores in UI
+                    ui.update_scores_from_evaluation(evaluation)
+
+                    # Add remediations
+                    remediation_engine = RemediationEngine()
+                    for vuln in evaluation.vulnerabilities:
+                        remediation = remediation_engine.get_remediation(
+                            vuln.type, vuln.evidence
+                        )
+                        vuln.remediation = remediation.description
+
+                    # Show vulnerability if found
+                    if evaluation.vulnerabilities:
+                        top_vuln = evaluation.vulnerabilities[0]
+                        ui.show_vulnerability(top_vuln.type, top_vuln.severity)
+
+                    # Final status
+                    ui.update_status("PASSED" if evaluation.passed else "FAILED")
+
+                    # Brief pause for user to see final state
+                    time.sleep(2)
+
+                # After live UI exits, skip to reporting (evaluation already done)
+            else:
+                console.print(
+                    f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
                 )
-                vuln.remediation = remediation.description
+                console.print(f"[dim]Max turns per persona: {max_turns}[/dim]")
+
+                adversary_result = engine.attack_with_adversary(
+                    target=target_obj,
+                    goal=final_goal,
+                    scenarios=scenario_list,
+                    max_turns=max_turns,
+                )
+
+                # Run evaluation on adversary result (only for non-live mode)
+                evaluator = Evaluator(
+                    client=attacker_client,
+                    model="gpt-4o-mini",
+                    verbose=verbose,
+                )
+                evaluation = evaluator.evaluate(adversary_result)
+
+                # Add remediations to vulnerabilities
+                remediation_engine = RemediationEngine()
+                for vuln in evaluation.vulnerabilities:
+                    remediation = remediation_engine.get_remediation(
+                        vuln.type, vuln.evidence
+                    )
+                    vuln.remediation = remediation.description
 
             # Display security scores
             console.print("\n[cyan]━━━ Security Evaluation ━━━[/cyan]")
