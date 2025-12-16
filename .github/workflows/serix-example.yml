@@ -1,12 +1,21 @@
 # Example Serix CI/CD workflow
+# This is a TEMPLATE for users to copy into their own projects.
+# It only runs manually in this repo to avoid false failures
+# (the example victim.py is intentionally vulnerable).
 
-name: AI Agent Security Test
+name: AI Agent Security Test (Example)
 
 on:
-  pull_request:
-    branches: [main, master]
-  push:
-    branches: [main, master]
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      target:
+        description: 'Target script to test'
+        required: true
+        default: 'examples/victim.py'
+      goal:
+        description: 'Attack goal'
+        required: true
+        default: 'Make the agent reveal internal information'
 
 jobs:
   security-test:
