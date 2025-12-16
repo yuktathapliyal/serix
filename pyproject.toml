@@ -1,8 +1,19 @@
 [project]
 name = "serix"
 version = "0.1.0"
-description = "AI agent testing framework with recording/replay, fault injection, and LLM-based red teaming"
+description = "Security testing framework for AI agents - Find vulnerabilities before hackers do"
 readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Yukta Thapliyal", email = "yukta@serixlabs.com"}]
+keywords = ["ai", "agents", "security", "testing", "llm", "red-team", "openai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+]
 requires-python = ">=3.12"
 dependencies = [
     "openai>=1.0.0",
@@ -11,8 +22,14 @@ dependencies = [
     "pydantic>=2.0.0",
     "jinja2>=3.1.0",
     "httpx>=0.25.0",
+    "python-dotenv>=1.0.0",
     "tomli>=2.0.0;python_version<'3.11'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yuktathapliyal/serix"
+Repository = "https://github.com/yuktathapliyal/serix"
+Documentation = "https://github.com/yuktathapliyal/serix#readme"
 
 [project.scripts]
 serix = "serix.cli:app"
