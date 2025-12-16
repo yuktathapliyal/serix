@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from rich.console import Console
 
@@ -25,6 +25,12 @@ if TYPE_CHECKING:
     from openai import OpenAI
 
     from serix.core.target import Target
+
+# Callback type aliases for live UI integration
+OnTurnCallback = Callable[[int, str], None]  # (turn, technique)
+OnAttackCallback = Callable[[str], None]  # (payload)
+OnResponseCallback = Callable[[str, int], None]  # (response, latency_ms)
+OnCriticCallback = Callable[[str, str], None]  # (verdict, confidence)
 
 console = Console()
 
@@ -167,6 +173,11 @@ class AdversaryLoop:
         critic_model: str = "gpt-4o-mini",
         max_turns: int = 3,
         verbose: bool = False,
+        # Callbacks for live UI integration
+        on_turn: OnTurnCallback | None = None,
+        on_attack: OnAttackCallback | None = None,
+        on_response: OnResponseCallback | None = None,
+        on_critic: OnCriticCallback | None = None,
     ) -> None:
         """Initialize the adversary loop.
 
@@ -177,6 +188,10 @@ class AdversaryLoop:
             critic_model: Model for turn-by-turn analysis (default: gpt-4o-mini for cost)
             max_turns: Maximum attack turns (default: 3 for token burn protection)
             verbose: Enable verbose logging
+            on_turn: Callback when a new turn starts
+            on_attack: Callback when attack payload is generated
+            on_response: Callback when agent responds
+            on_critic: Callback when critic analyzes response
         """
         self.client = attacker_client
         self.personas = personas
@@ -184,6 +199,11 @@ class AdversaryLoop:
         self.critic_model = critic_model
         self.max_turns = max_turns
         self.verbose = verbose
+        # Callbacks for live UI
+        self.on_turn = on_turn
+        self.on_attack = on_attack
+        self.on_response = on_response
+        self.on_critic = on_critic
 
     def _call_critic(self, goal: str, payload: str, response: str) -> CriticFeedback:
         """Have the Critic analyze an attack attempt.
@@ -367,6 +387,10 @@ class AdversaryLoop:
             payload = active_persona.generate_attack(context)
             previous_attempts.append(payload.content)
 
+            # Callback: new turn starting
+            if self.on_turn:
+                self.on_turn(turn, payload.technique)
+
             if self.verbose:
                 preview = (
                     payload.content[:100] + "..."
@@ -376,11 +400,19 @@ class AdversaryLoop:
                 console.print(f"[dim]Technique: {payload.technique}[/dim]")
                 console.print(f"[dim]Payload: {preview}[/dim]")
 
+            # Callback: attack payload generated
+            if self.on_attack:
+                self.on_attack(payload.content)
+
             # Send to target
             if self.verbose:
                 console.print("[dim]Sending to target...[/dim]")
 
             response = target.send(payload.content)
+
+            # Callback: agent responded
+            if self.on_response:
+                self.on_response(response.content, int(response.latency_ms))
 
             if self.verbose and response.latency_ms > 0:
                 console.print(f"[dim]Latency: {response.latency_ms:.0f}ms[/dim]")
@@ -396,6 +428,13 @@ class AdversaryLoop:
                 )
 
             feedback = self._call_critic(goal, payload.content, response.content)
+
+            # Callback: critic analysis complete
+            if self.on_critic:
+                verdict = (
+                    "LIKELY EXPLOITED" if feedback.likely_exploited else "DEFENDED"
+                )
+                self.on_critic(verdict, feedback.confidence)
 
             if self.verbose:
                 status = (
