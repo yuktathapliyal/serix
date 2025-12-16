@@ -1,4 +1,4 @@
-"""Reporting module - Rich console output, HTML reports, and JSON export."""
+"""Reporting module - Rich console output, HTML reports, JSON export, and live UI."""
 
 from serix.report.console import (
     print_attack_results,
@@ -19,6 +19,7 @@ from serix.report.html import (
     generate_html_report,
 )
 from serix.report.json_export import SerixReport, export_json, to_dict
+from serix.report.live_ui import AttackState, LiveAttackUI
 
 __all__ = [
     # Console output
@@ -40,4 +41,7 @@ __all__ = [
     "generate_github_summary",
     "write_github_output",
     "is_github_actions",
+    # Live UI
+    "LiveAttackUI",
+    "AttackState",
 ]
