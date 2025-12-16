@@ -154,7 +154,7 @@ def render_scores(state: AttackState) -> Panel:
     )
 
     return Panel(
-        Group(Text(bar, justify="center"), axes),
+        Group(Text.from_markup(bar, justify="center"), axes),
         title="[bold cyan]SCORE[/]",
         border_style="cyan",
     )
