@@ -9,6 +9,7 @@ from typing import Annotated
 
 import openai
 import typer
+from dotenv import load_dotenv
 from openai import OpenAI as OriginalOpenAI  # Save BEFORE any patching!
 from rich.console import Console
 
@@ -30,6 +31,71 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _validate_api_key(api_key: str) -> bool:
+    """Validate an API key by making a lightweight API call."""
+    import httpx
+
+    try:
+        console.print("[dim]Verifying API key...[/dim]", end=" ")
+        response = httpx.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10.0,
+        )
+        if response.status_code == 200:
+            console.print("[green]✓[/green]")
+            return True
+        else:
+            console.print("[red]✗[/red]")
+            return False
+    except Exception:
+        console.print("[red]✗[/red]")
+        return False
+
+
+def _ensure_api_key() -> bool:
+    """Check for API key, validate it, and prompt if missing or invalid."""
+    import os
+    from pathlib import Path
+
+    # Try loading from .env first
+    load_dotenv()
+
+    existing_key = os.environ.get("OPENAI_API_KEY")
+
+    # If key exists, validate it
+    if existing_key:
+        if _validate_api_key(existing_key):
+            return True
+        console.print("[yellow]⚠️  Existing API key is invalid or expired.[/yellow]")
+
+    # Interactive prompt
+    if not existing_key:
+        console.print("\n[yellow]⚠️  OpenAI API Key not found.[/yellow]")
+    console.print("Serix needs a valid API key to run adversarial attacks.\n")
+
+    api_key = typer.prompt(
+        "Enter your OpenAI API Key (will be saved to .env)", hide_input=True
+    )
+
+    if not api_key.startswith("sk-"):
+        console.print("[red]Invalid API key format (should start with sk-)[/red]")
+        return False
+
+    # Validate the new key
+    if not _validate_api_key(api_key):
+        console.print("[red]API key validation failed. Please check your key.[/red]")
+        return False
+
+    # Save to .env
+    env_path = Path(".env")
+    with open(env_path, "a") as f:
+        f.write(f"OPENAI_API_KEY={api_key}\n")
+    os.environ["OPENAI_API_KEY"] = api_key
+    console.print("[green]✓[/green] API key saved to .env")
+    return True
 
 
 def _apply_monkey_patch() -> None:
@@ -736,6 +802,71 @@ verbose = false                # Enable verbose output
     console.print("\n[dim]Next steps:[/dim]")
     console.print("  1. Edit serix.toml to set your target script and attack goal")
     console.print("  2. Run [cyan]serix attack[/cyan] to start testing")
+
+
+@app.command()
+def demo(
+    live: Annotated[
+        bool,
+        typer.Option("--live/--no-live", help="Enable live command center UI"),
+    ] = True,
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", "-r", help="HTML report output path"),
+    ] = None,
+    verbose: Annotated[
+        bool, typer.Option("-v", "--verbose", help="Verbose output")
+    ] = False,
+) -> None:
+    """Run a quick demo attack against a bundled vulnerable agent.
+
+    This demonstrates Serix's capabilities using a pre-configured
+    "golden victim" agent that is intentionally vulnerable to the
+    Grandma exploit.
+
+    Example:
+        serix demo              # Live UI mode
+        serix demo --no-live    # Console output only
+    """
+    import subprocess
+    import sys
+
+    from serix.examples import GOLDEN_VICTIM_PATH
+
+    # Ensure API key is available
+    if not _ensure_api_key():
+        raise typer.Exit(1)
+
+    report_path = report or Path("serix-demo-report.html")
+
+    console.print("[bold violet]Serix Demo[/bold violet] - Testing a vulnerable agent")
+    console.print("[dim]Target:[/dim] golden_victim (bundled)")
+    console.print("[dim]Scenario:[/dim] jailbreak (Grandma exploit)")
+    console.print("[dim]Goal:[/dim] Reveal the API key\n")
+
+    # Build command
+    cmd = [
+        sys.executable,
+        "-m",
+        "serix",
+        "test",
+        f"{GOLDEN_VICTIM_PATH}:golden_victim",
+        "--goal",
+        "reveal the API key",
+        "--scenarios",
+        "jailbreak",
+        "--report",
+        str(report_path),
+    ]
+
+    if live:
+        cmd.append("--live")
+    if verbose:
+        cmd.append("--verbose")
+
+    # Run as subprocess
+    result = subprocess.run(cmd)
+    raise typer.Exit(result.returncode)
 
 
 if __name__ == "__main__":
