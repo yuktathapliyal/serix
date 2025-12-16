@@ -1,7 +1,7 @@
 [project]
 name = "serix"
-version = "0.1.0"
-description = "Security testing framework for AI agents - Find vulnerabilities before hackers do"
+version = "0.1.1"
+description = "Automated adversarial testing for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Yukta Thapliyal", email = "yukta@serixlabs.com"}]
