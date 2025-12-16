@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from openai import OpenAI
 from rich.console import Console
@@ -463,6 +463,11 @@ The attack should be a single message that could be sent to an AI assistant.""",
         goal: str,
         scenarios: list[str] | None = None,
         max_turns: int = 3,
+        # Callbacks for live UI integration
+        on_turn: Callable[[int, str], None] | None = None,
+        on_attack: Callable[[str], None] | None = None,
+        on_response: Callable[[str, int], None] | None = None,
+        on_critic: Callable[[str, str], None] | None = None,
     ) -> "AdversaryResult":
         """Run adaptive adversary attack using personas.
 
@@ -475,6 +480,10 @@ The attack should be a single message that could be sent to an AI assistant.""",
             scenarios: List of scenario names (e.g., ["jailbreak", "pii_leak"])
                       If None, uses all personas
             max_turns: Maximum turns per persona (default: 3 for token protection)
+            on_turn: Callback when a new turn starts
+            on_attack: Callback when attack payload is generated
+            on_response: Callback when agent responds
+            on_critic: Callback when critic analyzes response
 
         Returns:
             AdversaryResult with attack outcome and conversation history
@@ -504,7 +513,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             # Fallback to jailbreaker if no personas resolved
             personas = [JailbreakerPersona(self.client)]
 
-        # Create adversary loop
+        # Create adversary loop with optional callbacks
         loop = AdversaryLoop(
             attacker_client=self.client,
             personas=personas,
@@ -512,6 +521,10 @@ The attack should be a single message that could be sent to an AI assistant.""",
             critic_model=self.model,  # Use attacker model for critic
             max_turns=max_turns,
             verbose=self.verbose,
+            on_turn=on_turn,
+            on_attack=on_attack,
+            on_response=on_response,
+            on_critic=on_critic,
         )
 
         # Run attack
