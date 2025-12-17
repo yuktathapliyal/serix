@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from serix.eval.evaluator import EvaluationResult
     from serix.eval.remediation import Remediation
     from serix.fuzz.adversary import AdversaryResult
+    from serix.heal.types import HealingResult
 
 
 @dataclass
@@ -31,6 +32,34 @@ class OWASPReportData:
 
 
 @dataclass
+class ToolFixReportData:
+    """Data for a tool fix recommendation in the report."""
+
+    recommendation: str
+    severity: str  # "required", "recommended", "optional"
+    owasp_code: str
+
+
+@dataclass
+class HealingReportData:
+    """Data for the Self-Healing proposal in the report."""
+
+    vulnerability_type: str
+    owasp_code: str
+    confidence: int  # 0-100 percentage
+    reasoning: str
+
+    # Text fix (patched prompt)
+    has_text_fix: bool = False
+    text_fix_diff: str = ""
+    text_fix_explanation: str = ""
+    patched_prompt: str = ""  # Full patched prompt for copy button
+
+    # Tool fixes
+    tool_fixes: list[ToolFixReportData] = field(default_factory=list)
+
+
+@dataclass
 class AttackReportData:
     """Data for a single attack in the report."""
 
@@ -40,6 +69,7 @@ class AttackReportData:
     success: bool
     judge_reasoning: str | None = None
     owasp: OWASPReportData | None = None
+    healing: HealingReportData | None = None
 
 
 @dataclass
@@ -70,6 +100,8 @@ class HTMLReportData:
 
     # OWASP data for vulnerabilities
     owasp_vulnerabilities: list[OWASPReportData] = field(default_factory=list)
+
+    healing: HealingReportData | None = None
 
 
 def create_report_data(
@@ -189,7 +221,7 @@ def generate_html_report(
 
 
 # ============================================================================
-# Evaluation Report (Module 3+)
+# Evaluation Report
 # ============================================================================
 
 
@@ -263,6 +295,8 @@ class EvaluationReportData:
     turns_taken: int = 0
     confidence: str = "medium"
 
+    healing: HealingReportData | None = None
+
     # Report type indicator (for template)
     is_evaluation_report: bool = True
 
@@ -284,6 +318,44 @@ def get_score_color(score: int) -> str:
         return "orange"
     else:
         return "red"
+
+
+def convert_healing_to_report_data(
+    healing: "HealingResult | None",
+) -> HealingReportData | None:
+    """Convert HealingResult to HealingReportData for template rendering.
+
+    Args:
+        healing: HealingResult from the Self-Healing engine
+
+    Returns:
+        HealingReportData for Jinja2 template, or None if no healing
+    """
+    if not healing:
+        return None
+
+    # Convert tool fixes
+    tool_fixes_data = [
+        ToolFixReportData(
+            recommendation=fix.recommendation,
+            severity=fix.severity,
+            owasp_code=fix.owasp_code,
+        )
+        for fix in healing.tool_fixes
+    ]
+
+    # Build report data
+    return HealingReportData(
+        vulnerability_type=healing.vulnerability_type,
+        owasp_code=healing.owasp_code,
+        confidence=int(healing.confidence * 100),
+        reasoning=healing.reasoning,
+        has_text_fix=healing.text_fix is not None,
+        text_fix_diff=healing.text_fix.diff if healing.text_fix else "",
+        text_fix_explanation=healing.text_fix.explanation if healing.text_fix else "",
+        patched_prompt=healing.text_fix.patched if healing.text_fix else "",
+        tool_fixes=tool_fixes_data,
+    )
 
 
 def highlight_python_code(code: str) -> str:
@@ -408,6 +480,11 @@ def create_evaluation_report_data(
                 )
             )
 
+    # Extract healing data if available
+    healing_data = convert_healing_to_report_data(
+        getattr(adversary_result, "healing", None)
+    )
+
     return EvaluationReportData(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         target=target,
@@ -425,6 +502,7 @@ def create_evaluation_report_data(
         persona_used=adversary_result.persona_used,
         turns_taken=adversary_result.turns_taken,
         confidence=adversary_result.confidence,
+        healing=healing_data,
     )
 
 
