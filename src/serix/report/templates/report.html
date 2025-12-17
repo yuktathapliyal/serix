@@ -811,6 +811,185 @@
         .hl-function { color: #61afef; }
         .hl-decorator { color: #e5c07b; }
 
+        /* Fix Suggestions Section */
+        .healing-section {
+            margin-bottom: 2rem;
+        }
+
+        .healing-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 2px solid var(--accent-blue);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .healing-header {
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-hover);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .healing-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .healing-icon {
+            font-size: 1.5rem;
+        }
+
+        .healing-title h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin: 0;
+        }
+
+        .healing-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .confidence-badge {
+            padding: 0.25rem 0.75rem;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .healing-body {
+            padding: 1.5rem;
+        }
+
+        .healing-reasoning {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-style: italic;
+        }
+
+        .healing-diff-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .diff-toggle {
+            cursor: pointer;
+            color: var(--accent-blue);
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .diff-explanation {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .diff-block {
+            position: relative;
+        }
+
+        .diff-content {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        /* Diff syntax highlighting */
+        .diff-content {
+            color: var(--text-secondary);
+        }
+
+        .tool-fixes-section {
+            margin-top: 1.5rem;
+        }
+
+        .tool-fixes-section h4 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .tool-fix-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .tool-fix-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-fix-item.severity-required {
+            border-left: 3px solid var(--accent-red);
+        }
+
+        .tool-fix-item.severity-recommended {
+            border-left: 3px solid var(--accent-yellow);
+        }
+
+        .tool-fix-item.severity-optional {
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .fix-severity-badge {
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .fix-severity-badge.required {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .fix-severity-badge.recommended {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-yellow);
+        }
+
+        .fix-severity-badge.optional {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .fix-recommendation {
+            flex: 1;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .fix-owasp {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+
         /* Attack Details */
         .attack-details {
             margin-top: 2rem;
@@ -938,8 +1117,60 @@
 
         {% if report.is_evaluation_report %}
         {# ============================================================ #}
-        {# EVALUATION REPORT (Module 3+)                                 #}
+        {# EVALUATION REPORT                                             #}
         {# ============================================================ #}
+
+        {% if report.healing %}
+        <!-- Fix Suggestions -->
+        <div class="section healing-section">
+            <div class="healing-card">
+                <div class="healing-header">
+                    <div class="healing-title">
+                        <span class="healing-icon">&#x1F3E5;</span>
+                        <h3>Self-Healing Proposal</h3>
+                    </div>
+                    <div class="healing-meta">
+                        <span class="confidence-badge">{{ report.healing.confidence }}% confidence</span>
+                        <span class="owasp-badge critical">{{ report.healing.owasp_code }}</span>
+                    </div>
+                </div>
+                <div class="healing-body">
+                    <p class="healing-reasoning">{{ report.healing.reasoning }}</p>
+
+                    {% if report.healing.has_text_fix %}
+                    <!-- Text Fix (Diff) -->
+                    <details class="healing-diff-section" open>
+                        <summary class="diff-toggle">
+                            <span>&#x1F4DD; Text Fix (Patched System Prompt)</span>
+                        </summary>
+                        <p class="diff-explanation">{{ report.healing.text_fix_explanation }}</p>
+                        <div class="code-block diff-block">
+                            <button class="copy-btn" onclick="copyPatchedPrompt()">Copy Patched Prompt</button>
+                            <pre class="diff-content">{{ report.healing.text_fix_diff }}</pre>
+                        </div>
+                        <textarea id="patched-prompt-text" style="display:none;">{{ report.healing.patched_prompt }}</textarea>
+                    </details>
+                    {% endif %}
+
+                    {% if report.healing.tool_fixes %}
+                    <!-- Tool Fixes -->
+                    <div class="tool-fixes-section">
+                        <h4>&#x1F527; Tool Fixes (Policy Recommendations)</h4>
+                        <ul class="tool-fix-list">
+                            {% for fix in report.healing.tool_fixes %}
+                            <li class="tool-fix-item severity-{{ fix.severity }}">
+                                <span class="fix-severity-badge {{ fix.severity }}">{{ fix.severity | upper }}</span>
+                                <span class="fix-recommendation">{{ fix.recommendation }}</span>
+                                <span class="fix-owasp">({{ fix.owasp_code }})</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Status Banner -->
         <div class="status-banner {{ 'failed' if not report.passed else 'passed' }}">
@@ -1137,7 +1368,7 @@
 
         {% else %}
         {# ============================================================ #}
-        {# LEGACY ATTACK REPORT (Module 2)                               #}
+        {# LEGACY ATTACK REPORT                                          #}
         {# ============================================================ #}
 
         <!-- Status Banner -->
@@ -1154,6 +1385,58 @@
                 <p>{{ report.status_message }}</p>
             </div>
         </div>
+
+        {% if report.healing %}
+        <!-- Fix Suggestions -->
+        <div class="section healing-section">
+            <div class="healing-card">
+                <div class="healing-header">
+                    <div class="healing-title">
+                        <span class="healing-icon">&#x1F3E5;</span>
+                        <h3>Self-Healing Proposal</h3>
+                    </div>
+                    <div class="healing-meta">
+                        <span class="confidence-badge">{{ report.healing.confidence }}% confidence</span>
+                        <span class="owasp-badge critical">{{ report.healing.owasp_code }}</span>
+                    </div>
+                </div>
+                <div class="healing-body">
+                    <p class="healing-reasoning">{{ report.healing.reasoning }}</p>
+
+                    {% if report.healing.has_text_fix %}
+                    <!-- Text Fix (Diff) -->
+                    <details class="healing-diff-section" open>
+                        <summary class="diff-toggle">
+                            <span>&#x1F4DD; Text Fix (Patched System Prompt)</span>
+                        </summary>
+                        <p class="diff-explanation">{{ report.healing.text_fix_explanation }}</p>
+                        <div class="code-block diff-block">
+                            <button class="copy-btn" onclick="copyPatchedPrompt()">Copy Patched Prompt</button>
+                            <pre class="diff-content">{{ report.healing.text_fix_diff }}</pre>
+                        </div>
+                        <textarea id="patched-prompt-text" style="display:none;">{{ report.healing.patched_prompt }}</textarea>
+                    </details>
+                    {% endif %}
+
+                    {% if report.healing.tool_fixes %}
+                    <!-- Tool Fixes -->
+                    <div class="tool-fixes-section">
+                        <h4>&#x1F527; Tool Fixes (Policy Recommendations)</h4>
+                        <ul class="tool-fix-list">
+                            {% for fix in report.healing.tool_fixes %}
+                            <li class="tool-fix-item severity-{{ fix.severity }}">
+                                <span class="fix-severity-badge {{ fix.severity }}">{{ fix.severity | upper }}</span>
+                                <span class="fix-recommendation">{{ fix.recommendation }}</span>
+                                <span class="fix-owasp">({{ fix.owasp_code }})</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Stats Grid -->
         <div class="stats-grid">
@@ -1377,6 +1660,21 @@
                     btn.textContent = 'Copy';
                 }, 2000);
             });
+        }
+
+        function copyPatchedPrompt() {
+            const textarea = document.getElementById('patched-prompt-text');
+            if (textarea) {
+                navigator.clipboard.writeText(textarea.value).then(() => {
+                    const btn = document.querySelector('.diff-block .copy-btn');
+                    if (btn) {
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => {
+                            btn.textContent = 'Copy Patched Prompt';
+                        }, 2000);
+                    }
+                });
+            }
         }
     </script>
 </body>
