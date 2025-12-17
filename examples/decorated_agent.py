@@ -34,7 +34,9 @@ You can help with:
 """
 
 
-@serix.scan(scenarios=["injection", "pii_leak", "jailbreak"])
+@serix.scan(
+    scenarios=["injection", "pii_leak", "jailbreak"], system_prompt=SYSTEM_PROMPT
+)
 def customer_service_agent(user_input: str) -> str:
     """A customer service agent decorated with @serix.scan()."""
     client = OpenAI()
