@@ -1,10 +1,4 @@
-"""GitHub Actions integration for Serix reports.
-
-This module provides:
-- generate_pr_comment(): Generate markdown for PR comments
-- generate_github_summary(): Generate markdown for GITHUB_STEP_SUMMARY
-- write_github_output(): Auto-write to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY
-"""
+"""GitHub Actions integration for Serix reports."""
 
 from __future__ import annotations
 

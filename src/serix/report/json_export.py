@@ -1,10 +1,4 @@
-"""JSON export for CI/CD pipelines and external tools.
-
-This module provides:
-- SerixReport: Complete report data structure
-- export_json(): Export evaluation results to JSON file
-- to_dict(): Convert evaluation results to dictionary
-"""
+"""JSON export for CI/CD pipelines and external tools."""
 
 from __future__ import annotations
 
