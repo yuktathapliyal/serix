@@ -1,9 +1,8 @@
 """Abstract Target interface for Serix.
 
-This module defines the Target abstraction that all attack modes use.
-The Target.send() method is the universal interface for:
-- ScriptTarget: Existing monkey-patch approach for Python scripts
-- DecoratorTarget: Clean @serix.scan() decorator integration
+Target.send() is the universal interface for all attack modes:
+- ScriptTarget: Monkey-patch approach for Python scripts
+- DecoratorTarget: @serix.scan() decorator integration
 - HttpTarget: HTTP endpoint testing for any language/framework
 """
 

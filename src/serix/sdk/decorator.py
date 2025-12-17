@@ -1,18 +1,9 @@
-"""Serix decorator for clean Python agent integration.
-
-This module provides the @serix.scan() decorator that marks functions
-for security testing without requiring monkey-patching.
+"""@serix.scan() decorator for Python agent security testing.
 
 Usage:
     @serix.scan(scenarios=["injection", "pii_leak", "jailbreak"])
     def my_agent(user_input: str) -> str:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_input}
-            ]
-        )
+        response = client.chat.completions.create(...)
         return response.choices[0].message.content
 """
 
@@ -72,8 +63,7 @@ def get_system_prompt(func_or_agent: Any) -> str | None:
         The system prompt string, or None if not provided
 
     Note:
-        Self-Healing (Day 2 feature) requires a system prompt to generate fixes.
-        If this returns None, Self-Healing will be disabled with a warning.
+        Fix generation requires a system prompt. Returns None if not provided.
     """
     # Check for _serix_config on the function/class
     config = getattr(func_or_agent, "_serix_config", None)
