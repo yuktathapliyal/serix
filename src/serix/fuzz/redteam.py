@@ -13,6 +13,7 @@ from rich.console import Console
 if TYPE_CHECKING:
     from serix.core.target import Target
     from serix.fuzz.adversary import AdversaryResult
+    from serix.heal.types import HealingResult
 
 console = Console()
 
@@ -35,6 +36,7 @@ class Attack:
     response: str | None = None
     success: bool = False
     judge_reasoning: str | None = None
+    healing: "HealingResult | None" = None
 
 
 @dataclass
@@ -463,6 +465,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
         goal: str,
         scenarios: list[str] | None = None,
         max_turns: int = 3,
+        system_prompt: str | None = None,
         # Callbacks for live UI integration
         on_turn: Callable[[int, str], None] | None = None,
         on_attack: Callable[[str], None] | None = None,
@@ -480,6 +483,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             scenarios: List of scenario names (e.g., ["jailbreak", "pii_leak"])
                       If None, uses all personas
             max_turns: Maximum turns per persona (default: 3 for token protection)
+            system_prompt: Agent's system prompt (enables fix generation)
             on_turn: Callback when a new turn starts
             on_attack: Callback when attack payload is generated
             on_response: Callback when agent responds
@@ -528,4 +532,56 @@ The attack should be a single message that could be sent to an AI assistant.""",
         )
 
         # Run attack
-        return loop.attack(target, goal)
+        result = loop.attack(target, goal)
+
+        # Generate fix suggestions if attack succeeded
+        if result.success and system_prompt:
+            self._generate_healing(result, system_prompt)
+        elif result.success and not system_prompt:
+            console.print(
+                "[yellow]Fix generation disabled: No system_prompt provided. "
+                "Add system_prompt to @serix.scan() to enable fix suggestions.[/yellow]"
+            )
+
+        return result
+
+    def _generate_healing(
+        self,
+        result: "AdversaryResult",
+        system_prompt: str,
+    ) -> None:
+        """Generate healing suggestions for a successful attack.
+
+        Args:
+            result: The AdversaryResult to attach healing to
+            system_prompt: The original system prompt
+        """
+        from serix.heal import AttackContext, HealingEngine
+
+        # Get the last agent response from conversation
+        agent_response = ""
+        for msg in reversed(result.conversation):
+            if msg.get("role") == "agent":
+                agent_response = msg.get("content", "")
+                break
+
+        # Create attack context
+        context = AttackContext(
+            payload=result.winning_payload or "",
+            response=agent_response,
+            vulnerability_type=result.vulnerability_type or "jailbreak",
+        )
+
+        # Generate healing with spinner for UX
+        with console.status(
+            "[bold cyan]Generating fix suggestions...[/bold cyan]",
+            spinner="dots",
+        ):
+            engine = HealingEngine(llm_client=self.client)
+            healing_result = engine.heal(
+                system_prompt=system_prompt,
+                attack_context=context,
+            )
+
+        # Attach to result
+        result.healing = healing_result
