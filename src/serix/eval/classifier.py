@@ -183,6 +183,126 @@ VULNERABILITY_DEFINITIONS: dict[VulnerabilityCategory, VulnerabilityDefinition] 
 }
 
 
+@dataclass
+class OWASPInfo:
+    """OWASP vulnerability reference information."""
+
+    code: str  # e.g., "LLM01"
+    name: str  # e.g., "Prompt Injection"
+    severity: str  # e.g., "CRITICAL"
+    description: str
+    url: str  # Link to OWASP documentation
+
+
+# OWASP LLM Top 10 definitions
+OWASP_LLM_TOP_10: dict[str, OWASPInfo] = {
+    "LLM01": OWASPInfo(
+        code="LLM01",
+        name="Prompt Injection",
+        severity="CRITICAL",
+        description="Attacker manipulates LLM via crafted inputs to override instructions",
+        url="https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+    ),
+    "LLM02": OWASPInfo(
+        code="LLM02",
+        name="Insecure Output Handling",
+        severity="HIGH",
+        description="LLM output used without validation, enabling downstream attacks",
+        url="https://genai.owasp.org/llmrisk/llm02-insecure-output-handling/",
+    ),
+    "LLM06": OWASPInfo(
+        code="LLM06",
+        name="Sensitive Information Disclosure",
+        severity="HIGH",
+        description="LLM reveals confidential data, PII, or credentials",
+        url="https://genai.owasp.org/llmrisk/llm06-sensitive-information-disclosure/",
+    ),
+    "LLM07": OWASPInfo(
+        code="LLM07",
+        name="System Prompt Leakage",
+        severity="MEDIUM",
+        description="LLM reveals its system instructions or configuration",
+        url="https://genai.owasp.org/llmrisk/llm07-system-prompt-leakage/",
+    ),
+    "LLM08": OWASPInfo(
+        code="LLM08",
+        name="Excessive Agency",
+        severity="CRITICAL",
+        description="LLM granted too much autonomy, leading to unauthorized actions",
+        url="https://genai.owasp.org/llmrisk/llm08-excessive-agency/",
+    ),
+    "LLM09": OWASPInfo(
+        code="LLM09",
+        name="Overreliance",
+        severity="MEDIUM",
+        description="Excessive dependence on LLM without proper oversight",
+        url="https://genai.owasp.org/llmrisk/llm09-overreliance/",
+    ),
+}
+
+
+def get_owasp_info(category_or_type: str | VulnerabilityCategory) -> OWASPInfo | None:
+    """Get OWASP information for a vulnerability category or type.
+
+    Args:
+        category_or_type: VulnerabilityCategory enum or string type name
+            (e.g., "jailbreak", "tool_abuse", "prompt_injection")
+
+    Returns:
+        OWASPInfo with code, name, severity, and description, or None if not found
+    """
+    # Handle VulnerabilityCategory enum
+    if isinstance(category_or_type, VulnerabilityCategory):
+        definition = VULNERABILITY_DEFINITIONS.get(category_or_type)
+        if definition and definition.owasp_reference:
+            return OWASP_LLM_TOP_10.get(definition.owasp_reference)
+        return None
+
+    # Handle string type names (from Module 2)
+    type_lower = category_or_type.lower()
+
+    # Direct mapping for common scenario names
+    direct_mapping = {
+        "jailbreak": "LLM01",
+        "injection": "LLM01",
+        "prompt_injection": "LLM01",
+        "data_leak": "LLM06",
+        "pii_leak": "LLM06",
+        "extraction": "LLM06",
+        "system_prompt_leak": "LLM07",
+        "tool_abuse": "LLM08",
+        "unauthorized_action": "LLM08",
+        "excessive_agency": "LLM08",
+        "hallucination": "LLM09",
+    }
+
+    owasp_code = direct_mapping.get(type_lower)
+    if owasp_code:
+        return OWASP_LLM_TOP_10.get(owasp_code)
+
+    # Try to find via VulnerabilityCategory
+    for category in VulnerabilityCategory:
+        if category.value == type_lower:
+            definition = VULNERABILITY_DEFINITIONS.get(category)
+            if definition and definition.owasp_reference:
+                return OWASP_LLM_TOP_10.get(definition.owasp_reference)
+
+    return None
+
+
+def get_owasp_code(vulnerability_type: str) -> str:
+    """Get just the OWASP code for a vulnerability type.
+
+    Args:
+        vulnerability_type: The vulnerability type string
+
+    Returns:
+        OWASP code (e.g., "LLM01") or "N/A" if not mapped
+    """
+    info = get_owasp_info(vulnerability_type)
+    return info.code if info else "N/A"
+
+
 class VulnerabilityClassifier:
     """Classifies attack outcomes into vulnerability categories.
 
