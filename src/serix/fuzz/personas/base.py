@@ -1,9 +1,4 @@
-"""Base classes and types for Attack Personas.
-
-This module defines the foundational abstractions for the persona-based
-attack system. Each persona represents a specialized attack strategy
-that can adapt based on agent responses.
-"""
+"""Base classes and types for Attack Personas."""
 
 from __future__ import annotations
 
@@ -72,21 +67,11 @@ class AttackPayload:
 
 
 class AttackPersona(ABC):
-    """Abstract base class for all attack personas.
+    """Abstract base class for attack personas.
 
-    Each persona specializes in a particular attack strategy (e.g., jailbreaking,
-    data extraction, confusion). Personas are stateful and can adapt their
-    strategy based on previous attempts and critic feedback.
-
-    The key insight is that personas don't just run static templates - they
-    use an LLM to generate adaptive attacks based on the agent's responses.
-
-    Example:
-        ```python
-        persona = JailbreakerPersona(client, config)
-        context = AttackContext(goal="reveal secrets", turn=1)
-        payload = persona.generate_attack(context)
-        ```
+    Personas specialize in particular attack strategies (jailbreaking, data
+    extraction, confusion, etc.) and adapt based on agent responses using
+    LLM-generated attacks rather than static templates.
     """
 
     def __init__(self, client: "OpenAI", config: PersonaConfig) -> None:

@@ -1,30 +1,6 @@
-"""Attack Personas for Serix red team engine.
+"""Attack personas for adaptive red team attacks.
 
-This module provides specialized attack personas that generate adaptive,
-intelligent attacks based on agent responses.
-
-Available personas:
-- JailbreakerPersona: Bypasses AI safety guidelines
-- ExtractorPersona: Extracts sensitive information (secrets, PII)
-- ConfuserPersona: Causes hallucinations and contradictions
-- ManipulatorPersona: Triggers unauthorized actions/tool abuse
-
-Usage:
-    from openai import OpenAI
-    from serix.fuzz.personas import JailbreakerPersona, AttackContext
-
-    client = OpenAI()
-    persona = JailbreakerPersona(client)
-
-    context = AttackContext(
-        goal="reveal API keys",
-        turn=1,
-        conversation_history=[],
-        previous_attempts=[],
-    )
-
-    payload = persona.generate_attack(context)
-    print(payload.content)
+Personas: JailbreakerPersona, ExtractorPersona, ConfuserPersona, ManipulatorPersona
 """
 
 from serix.fuzz.personas.base import (

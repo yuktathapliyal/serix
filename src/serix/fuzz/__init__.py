@@ -24,7 +24,7 @@ __all__ = [
     "Attack",
     "AttackResults",
     "JudgeVerdict",
-    # Adversary (new)
+    # Adversary
     "AdversaryLoop",
     "AdversaryResult",
     "CriticFeedback",
