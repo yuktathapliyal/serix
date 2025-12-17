@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
 
 from serix.core.types import RecordingSession
 from serix.fuzz.engine import FuzzResult
 from serix.fuzz.redteam import Attack, AttackResults
+
+if TYPE_CHECKING:
+    from serix.heal.types import HealingResult
 
 console = Console()
 
@@ -309,3 +315,122 @@ def print_attack_results(
         console.print(verdict)
     else:
         console.print("\n[bold green]SECURE:[/bold green] Agent resisted all attacks")
+
+
+# Maximum lines to show in CLI diff (truncate if longer)
+MAX_DIFF_LINES_CLI = 50
+
+
+def print_healing_result(healing: "HealingResult") -> None:
+    """Print healing result with diff and tool fixes.
+
+    Displays:
+    - Text fix with syntax-highlighted unified diff
+    - Tool fix recommendations with severity badges
+
+    Args:
+        healing: HealingResult from the Self-Healing engine
+    """
+    console.print()
+    console.print(
+        Panel(
+            "[bold cyan]SELF-HEALING PROPOSAL[/bold cyan]",
+            border_style="cyan",
+            padding=(0, 2),
+        )
+    )
+
+    # Show confidence and OWASP code
+    confidence_pct = int(healing.confidence * 100)
+    console.print(
+        f"\n[dim]Confidence:[/dim] {confidence_pct}%  "
+        f"[dim]OWASP:[/dim] {healing.owasp_code}  "
+        f"[dim]Type:[/dim] {healing.vulnerability_type}"
+    )
+
+    # Text Fix (System Prompt Diff)
+    if healing.text_fix:
+        console.print("\n[bold green]TEXT FIX (System Prompt):[/bold green]")
+        console.print(f"[dim]{healing.text_fix.explanation}[/dim]")
+
+        diff_text = healing.text_fix.diff
+        diff_lines = diff_text.split("\n")
+
+        # Truncate if too long for CLI
+        if len(diff_lines) > MAX_DIFF_LINES_CLI:
+            truncated_diff = "\n".join(diff_lines[:MAX_DIFF_LINES_CLI])
+            truncated_diff += (
+                f"\n... ({len(diff_lines) - MAX_DIFF_LINES_CLI} more lines)"
+            )
+            diff_text = truncated_diff
+
+        # Display diff with syntax highlighting
+        if diff_text.strip():
+            syntax = Syntax(
+                diff_text,
+                "diff",
+                theme="monokai",
+                line_numbers=False,
+                word_wrap=True,
+            )
+            console.print(
+                Panel(
+                    syntax,
+                    title="[bold]Unified Diff[/bold]",
+                    border_style="green",
+                    padding=(0, 1),
+                )
+            )
+        else:
+            console.print("[dim]No diff generated[/dim]")
+
+    else:
+        console.print(
+            "\n[yellow]No text fix available (system_prompt required)[/yellow]"
+        )
+
+    # Tool Fixes (Policy Recommendations)
+    if healing.tool_fixes:
+        console.print("\n[bold blue]TOOL FIXES (Policy):[/bold blue]")
+
+        tool_tree = Tree("[bold]Recommendations[/bold]")
+        for fix in healing.tool_fixes:
+            # Color-code by severity
+            if fix.severity == "required":
+                severity_badge = "[bold red][REQUIRED][/bold red]"
+            elif fix.severity == "recommended":
+                severity_badge = "[bold yellow][RECOMMENDED][/bold yellow]"
+            else:
+                severity_badge = "[dim][OPTIONAL][/dim]"
+
+            node_text = f"{severity_badge} {fix.recommendation}"
+            if fix.owasp_code:
+                node_text += f" [dim]({fix.owasp_code})[/dim]"
+
+            tool_tree.add(node_text)
+
+        console.print(tool_tree)
+
+    console.print()
+
+
+def print_healing_summary(healing: "HealingResult") -> None:
+    """Print a compact summary of healing result.
+
+    Use this for inline display after vulnerability alerts.
+
+    Args:
+        healing: HealingResult from the Self-Healing engine
+    """
+    if not healing:
+        return
+
+    console.print()
+    console.print("[cyan]Fix suggestions generated.[/cyan]", end=" ")
+
+    fix_count = 0
+    if healing.text_fix:
+        fix_count += 1
+    fix_count += len(healing.tool_fixes)
+
+    console.print(f"[dim]({fix_count} recommendations)[/dim]")
