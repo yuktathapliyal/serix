@@ -474,6 +474,76 @@
             border: 1px solid var(--accent-blue);
         }
 
+        /* OWASP Badge Styling */
+        .owasp-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-left: 0.5rem;
+        }
+
+        .owasp-badge.critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+        }
+
+        .owasp-badge.high {
+            background: rgba(249, 115, 22, 0.15);
+            color: var(--accent-orange);
+            border: 1px solid var(--accent-orange);
+        }
+
+        .owasp-badge.medium {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-yellow);
+            border: 1px solid var(--accent-yellow);
+        }
+
+        .owasp-info {
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .owasp-info a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        .owasp-info a:hover {
+            text-decoration: underline;
+        }
+
+        .owasp-summary {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .owasp-summary h3 {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .owasp-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
         .vuln-type {
             font-family: 'SF Mono', 'Consolas', monospace;
             font-size: 0.875rem;
@@ -949,9 +1019,22 @@
                     <div class="vuln-header">
                         <span class="severity-badge {{ vuln.severity }}">{{ vuln.severity | upper }}</span>
                         <span class="vuln-type">{{ vuln.type }}</span>
+                        {% if vuln.owasp %}
+                        <span class="owasp-badge {{ vuln.owasp.severity | lower }}">
+                            [{{ vuln.owasp.code }}] {{ vuln.owasp.name }}
+                        </span>
+                        {% endif %}
                     </div>
                     <div class="vuln-body">
                         <p class="vuln-description">{{ vuln.description }}</p>
+                        {% if vuln.owasp %}
+                        <div class="owasp-info">
+                            <strong>{{ vuln.owasp.code }}</strong>: {{ vuln.owasp.description }}
+                            {% if vuln.owasp.url %}
+                            <br><a href="{{ vuln.owasp.url }}" target="_blank" rel="noopener">OWASP Reference</a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         {% if vuln.evidence %}
                         <details class="vuln-evidence">
                             <summary>View Evidence</summary>
@@ -1087,10 +1170,33 @@
                 <div class="value green">{{ report.defended_attacks }}</div>
             </div>
             <div class="stat-card">
-                <div class="label">Success Rate</div>
+                <div class="label">Exploit Rate</div>
                 <div class="value {{ 'red' if report.exploit_rate > 0 else 'green' }}">{{ "%.1f"|format(report.exploit_rate) }}%</div>
             </div>
         </div>
+
+        {% if report.owasp_vulnerabilities %}
+        <!-- OWASP Vulnerability Summary -->
+        <div class="owasp-summary">
+            <h3>OWASP LLM Top 10 Vulnerabilities Found</h3>
+            <div class="owasp-list">
+                {% for owasp in report.owasp_vulnerabilities %}
+                <div class="owasp-badge {{ owasp.severity | lower }}">
+                    [{{ owasp.code }}] {{ owasp.name }}
+                </div>
+                {% endfor %}
+            </div>
+            {% for owasp in report.owasp_vulnerabilities %}
+            <div class="owasp-info">
+                <strong>{{ owasp.code }} - {{ owasp.name }}</strong> ({{ owasp.severity }})<br>
+                <span style="color: var(--text-secondary)">{{ owasp.description }}</span>
+                {% if owasp.url %}
+                <br><a href="{{ owasp.url }}" target="_blank" rel="noopener">Learn more at OWASP</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- Charts -->
         <div class="charts-section">
@@ -1149,22 +1255,32 @@
         <div class="section">
             <h3>Attack Summary</h3>
             <div class="attacks-table">
-                <div class="table-header">
+                <div class="table-header" style="grid-template-columns: 60px 130px 90px 100px 1fr;">
                     <div>#</div>
                     <div>Strategy</div>
+                    <div>OWASP</div>
                     <div>Result</div>
                     <div>Payload Preview</div>
                 </div>
                 {% for attack in report.attacks %}
-                <div class="table-row">
+                <div class="table-row" style="grid-template-columns: 60px 130px 90px 100px 1fr;">
                     <div>{{ loop.index }}</div>
                     <div>{{ attack.strategy }}</div>
+                    <div>
+                        {% if attack.owasp %}
+                        <span class="owasp-badge {{ attack.owasp.severity | lower }}" style="margin-left: 0; font-size: 0.65rem; padding: 0.15rem 0.5rem;">
+                            {{ attack.owasp.code }}
+                        </span>
+                        {% else %}
+                        <span style="color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </div>
                     <div>
                         <span class="badge {{ 'exploited' if attack.success else 'defended' }}">
                             {{ 'Exploited' if attack.success else 'Defended' }}
                         </span>
                     </div>
-                    <div class="payload-preview">{{ attack.payload[:80] }}{% if attack.payload|length > 80 %}...{% endif %}</div>
+                    <div class="payload-preview">{{ attack.payload[:70] }}{% if attack.payload|length > 70 %}...{% endif %}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -1184,6 +1300,11 @@
                                 <span class="badge {{ 'exploited' if attack.success else 'defended' }}">
                                     {{ 'Exploited' if attack.success else 'Defended' }}
                                 </span>
+                                {% if attack.owasp %}
+                                <span class="owasp-badge {{ attack.owasp.severity | lower }}">
+                                    [{{ attack.owasp.code }}] {{ attack.owasp.name }}
+                                </span>
+                                {% endif %}
                             </span>
                         </div>
                     </div>
