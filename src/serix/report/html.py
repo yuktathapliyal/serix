@@ -20,6 +20,17 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class OWASPReportData:
+    """OWASP vulnerability data for the report."""
+
+    code: str  # e.g., "LLM01"
+    name: str  # e.g., "Prompt Injection"
+    severity: str  # e.g., "CRITICAL"
+    description: str
+    url: str = ""
+
+
+@dataclass
 class AttackReportData:
     """Data for a single attack in the report."""
 
@@ -28,6 +39,7 @@ class AttackReportData:
     response: str | None
     success: bool
     judge_reasoning: str | None = None
+    owasp: OWASPReportData | None = None
 
 
 @dataclass
@@ -56,16 +68,34 @@ class HTMLReportData:
     # Strategy breakdown
     strategy_breakdown: dict[str, dict[str, Any]] = field(default_factory=dict)
 
+    # OWASP data for vulnerabilities
+    owasp_vulnerabilities: list[OWASPReportData] = field(default_factory=list)
+
 
 def create_report_data(
     results: AttackResults,
     script_path: str,
     judge_model: str | None = None,
+    vulnerability_type: str = "jailbreak",
 ) -> HTMLReportData:
-    """Convert AttackResults to HTMLReportData."""
+    """Convert AttackResults to HTMLReportData with OWASP classification."""
+    from serix.eval.classifier import get_owasp_info
+
     total = len(results.attacks)
     successful = len(results.successful_attacks)
     defended = total - successful
+
+    # Get OWASP info for this vulnerability type
+    owasp_info = get_owasp_info(vulnerability_type)
+    owasp_report_data = None
+    if owasp_info:
+        owasp_report_data = OWASPReportData(
+            code=owasp_info.code,
+            name=owasp_info.name,
+            severity=owasp_info.severity,
+            description=owasp_info.description,
+            url=owasp_info.url,
+        )
 
     # Build strategy breakdown
     strategy_breakdown: dict[str, dict[str, Any]] = {}
@@ -76,7 +106,7 @@ def create_report_data(
         if attack.success:
             strategy_breakdown[attack.strategy]["exploited"] = True
 
-    # Create attack report data
+    # Create attack report data with OWASP info for successful attacks
     attack_data = [
         AttackReportData(
             strategy=a.strategy,
@@ -84,9 +114,15 @@ def create_report_data(
             response=a.response,
             success=a.success,
             judge_reasoning=getattr(a, "judge_reasoning", None),
+            owasp=owasp_report_data if a.success else None,
         )
         for a in results.attacks
     ]
+
+    # Collect unique OWASP vulnerabilities found
+    owasp_vulnerabilities = []
+    if owasp_report_data and successful > 0:
+        owasp_vulnerabilities.append(owasp_report_data)
 
     return HTMLReportData(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -105,6 +141,7 @@ def create_report_data(
         exploit_rate=(successful / total * 100) if total > 0 else 0,
         attacks=attack_data,
         strategy_breakdown=strategy_breakdown,
+        owasp_vulnerabilities=owasp_vulnerabilities,
     )
 
 
@@ -113,6 +150,7 @@ def generate_html_report(
     script_path: str,
     output_path: Path,
     judge_model: str | None = None,
+    vulnerability_type: str = "jailbreak",
 ) -> Path:
     """Generate an HTML report from attack results.
 
@@ -121,6 +159,7 @@ def generate_html_report(
         script_path: Path to the script that was tested
         output_path: Where to save the HTML file
         judge_model: Model used for judging (for metadata)
+        vulnerability_type: The type of vulnerability being tested
 
     Returns:
         Path to the generated report
@@ -134,8 +173,10 @@ def generate_html_report(
     # Load template
     template = env.get_template("report.html")
 
-    # Create report data
-    report_data = create_report_data(results, script_path, judge_model)
+    # Create report data with OWASP classification
+    report_data = create_report_data(
+        results, script_path, judge_model, vulnerability_type
+    )
 
     # Render template
     html_content = template.render(report=report_data)
@@ -161,6 +202,7 @@ class VulnerabilityReportData:
     description: str
     evidence: str
     remediation: str
+    owasp: OWASPReportData | None = None
 
 
 @dataclass
@@ -312,17 +354,31 @@ def create_evaluation_report_data(
     Returns:
         EvaluationReportData for template rendering
     """
-    # Convert vulnerabilities
-    vuln_data = [
-        VulnerabilityReportData(
-            type=v.type,
-            severity=v.severity,
-            description=v.description,
-            evidence=v.evidence,
-            remediation=v.remediation,
+    from serix.eval.classifier import get_owasp_info
+
+    # Convert vulnerabilities with OWASP info
+    vuln_data = []
+    for v in evaluation.vulnerabilities:
+        owasp_info = get_owasp_info(v.type)
+        owasp_report_data = None
+        if owasp_info:
+            owasp_report_data = OWASPReportData(
+                code=owasp_info.code,
+                name=owasp_info.name,
+                severity=owasp_info.severity,
+                description=owasp_info.description,
+                url=owasp_info.url,
+            )
+        vuln_data.append(
+            VulnerabilityReportData(
+                type=v.type,
+                severity=v.severity,
+                description=v.description,
+                evidence=v.evidence,
+                remediation=v.remediation,
+                owasp=owasp_report_data,
+            )
         )
-        for v in evaluation.vulnerabilities
-    ]
 
     # Convert conversation
     conv_data = [
