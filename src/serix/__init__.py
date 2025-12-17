@@ -55,7 +55,7 @@ __all__ = [
     "RedTeamEngine",
     "Attack",
     "AttackResults",
-    # Evaluation (Module 3)
+    # Evaluation
     "Evaluator",
     "EvaluationResult",
     "EvaluationScore",

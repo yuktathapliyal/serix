@@ -1,10 +1,4 @@
-"""Evaluation rubric definitions for multi-axis security scoring.
-
-This module defines:
-- Scoring axes (safety, compliance, information_leakage, role_adherence)
-- Axis weights and pass/fail thresholds
-- Rubric configuration with sensible defaults
-"""
+"""Evaluation rubric for multi-axis security scoring."""
 
 from __future__ import annotations
 

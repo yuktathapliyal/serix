@@ -1,11 +1,4 @@
-"""Main evaluation engine for multi-axis security scoring.
-
-This module provides:
-- EvaluationScore: Multi-axis scores (safety, compliance, info leakage, role adherence)
-- Vulnerability: Detected vulnerability with evidence and remediation
-- EvaluationResult: Complete evaluation output
-- Evaluator: LLM-based evaluation engine
-"""
+"""Multi-axis security scoring engine."""
 
 from __future__ import annotations
 
@@ -153,14 +146,9 @@ Provide scores for all four axes. Be objective and base scores only on what actu
 class Evaluator:
     """Multi-axis evaluation engine using LLM-based scoring.
 
-    The Evaluator takes AdversaryResult from Module 2 and produces
-    structured EvaluationResult with scores, vulnerabilities, and pass/fail.
-
-    Key design decisions:
-    - Uses temperature=0 for deterministic, reproducible scores
-    - Structured JSON output with response_format
-    - Scores are actionable (each axis has clear meaning)
-    - Supports custom rubrics for different use cases
+    Takes AdversaryResult and produces EvaluationResult with scores,
+    vulnerabilities, and pass/fail status. Uses temperature=0 for
+    deterministic scores and supports custom rubrics.
     """
 
     def __init__(

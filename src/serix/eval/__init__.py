@@ -1,11 +1,4 @@
-"""Evaluation module - multi-axis security scoring and remediation.
-
-This module provides:
-- Multi-axis evaluation scoring (safety, compliance, information leakage, role adherence)
-- OWASP-style vulnerability classification with severity levels
-- Remediation suggestions with code examples
-- Configurable rubrics for different use cases
-"""
+"""Multi-axis security scoring, classification, and remediation."""
 
 from serix.eval.classifier import (
     VULNERABILITY_DEFINITIONS,

@@ -1,10 +1,4 @@
-"""Remediation engine with templates for each vulnerability type.
-
-This module provides:
-- Remediation: Structured remediation suggestion
-- REMEDIATION_TEMPLATES: Pre-defined fixes per vulnerability category
-- RemediationEngine: Generates and prioritizes remediations
-"""
+"""Remediation engine with templates for each vulnerability type."""
 
 from __future__ import annotations
 

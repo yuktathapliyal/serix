@@ -1,10 +1,4 @@
-"""Vulnerability classification with OWASP-style categories.
-
-This module defines:
-- Severity levels (critical, high, medium, low, info)
-- OWASP-style vulnerability categories for AI agents
-- Mapping from Module 2 vulnerability types to detailed categories
-"""
+"""OWASP-style vulnerability classification for AI agents."""
 
 from __future__ import annotations
 
@@ -258,7 +252,7 @@ def get_owasp_info(category_or_type: str | VulnerabilityCategory) -> OWASPInfo |
             return OWASP_LLM_TOP_10.get(definition.owasp_reference)
         return None
 
-    # Handle string type names (from Module 2)
+    # Handle string type names
     type_lower = category_or_type.lower()
 
     # Direct mapping for common scenario names
@@ -310,7 +304,7 @@ class VulnerabilityClassifier:
     hallucination, tool_abuse) to more granular OWASP-style categories.
     """
 
-    # Mapping from Module 2 vulnerability types to detailed categories
+    # Vulnerability type to category mapping
     TYPE_MAPPING: dict[str, list[VulnerabilityCategory]] = {
         "jailbreak": [
             VulnerabilityCategory.JAILBREAK,
