@@ -1,14 +1,6 @@
 """Adversary Loop for multi-turn adaptive attacks.
 
-This module implements the AdversaryLoop which orchestrates:
-1. Persona-based attack generation
-2. Target interaction
-3. Critic analysis of responses
-4. Adaptive strategy adjustment
-5. Final judge verdict
-
-The key insight is that attacks are no longer static templates - they
-adapt based on how the target responds, guided by a Critic LLM.
+Attacks adapt based on how the target responds, guided by a Critic LLM.
 """
 
 from __future__ import annotations
@@ -25,6 +17,7 @@ if TYPE_CHECKING:
     from openai import OpenAI
 
     from serix.core.target import Target
+    from serix.heal.types import HealingResult
 
 # Callback type aliases for live UI integration
 OnTurnCallback = Callable[[int, str], None]  # (turn, technique)
@@ -68,6 +61,7 @@ class AdversaryResult:
         vulnerability_type: Type of vulnerability found (if any)
         confidence: Confidence level of the final verdict
         judge_reasoning: Judge's explanation for the verdict
+        healing: Fix suggestions if attack succeeded
     """
 
     success: bool
@@ -78,6 +72,7 @@ class AdversaryResult:
     vulnerability_type: str | None = None
     confidence: str = "medium"
     judge_reasoning: str = ""
+    healing: "HealingResult | None" = None
 
 
 # Critic system prompt for analyzing responses
