@@ -452,10 +452,11 @@ def test(
     from serix.report.github import write_github_output
     from serix.report.html import generate_evaluation_report, generate_html_report
     from serix.report.json_export import export_json
-    from serix.sdk.decorator import Agent, load_function_from_path
+    from serix.sdk.decorator import Agent, get_system_prompt, load_function_from_path
 
     # Determine target type and create appropriate Target
     target_obj: Target
+    system_prompt: str | None = None
 
     if target.startswith("http://") or target.startswith("https://"):
         # HTTP endpoint target
@@ -470,6 +471,7 @@ def test(
             headers=parsed_headers,
             verbose=verbose,
         )
+        # HTTP targets don't have system_prompt access
     elif ":" in target:
         # Python function or class target
         file_path, name = target.rsplit(":", 1)
@@ -481,6 +483,8 @@ def test(
             # Try loading as function first
             func = load_function_from_path(target)
 
+            system_prompt = get_system_prompt(func)
+
             # Check if it's an Agent class
             if isinstance(func, type) and issubclass(func, Agent):
                 agent_instance = func()
@@ -488,6 +492,9 @@ def test(
                     func=agent_instance.respond,
                     verbose=verbose,
                 )
+                # Try to get system_prompt from agent class
+                if not system_prompt:
+                    system_prompt = get_system_prompt(agent_instance)
             else:
                 # Regular function - cast to expected signature
                 from typing import Callable, cast
@@ -557,6 +564,7 @@ def test(
                         goal=final_goal,
                         scenarios=scenario_list,
                         max_turns=max_turns,
+                        system_prompt=system_prompt,
                         on_turn=ui.update_turn,
                         on_attack=ui.update_attacker_message,
                         on_response=ui.update_agent_response,
@@ -596,6 +604,12 @@ def test(
                     # Brief pause for user to see final state
                     time.sleep(2)
 
+                # Print fix suggestions after live UI exits
+                if adversary_result.healing:
+                    from serix.report.console import print_healing_result
+
+                    print_healing_result(adversary_result.healing)
+
                 # After live UI exits, skip to reporting (evaluation already done)
             else:
                 console.print(
@@ -608,7 +622,14 @@ def test(
                     goal=final_goal,
                     scenarios=scenario_list,
                     max_turns=max_turns,
+                    system_prompt=system_prompt,
                 )
+
+                # Print fix suggestions if available
+                if adversary_result.healing:
+                    from serix.report.console import print_healing_result
+
+                    print_healing_result(adversary_result.healing)
 
                 # Run evaluation on adversary result (only for non-live mode)
                 evaluator = Evaluator(
