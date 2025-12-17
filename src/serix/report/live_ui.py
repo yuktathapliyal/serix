@@ -28,7 +28,7 @@ from rich.table import Table
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from serix.eval.types import EvaluationResult
+    from serix.eval.evaluator import EvaluationResult
 
 
 @dataclass
