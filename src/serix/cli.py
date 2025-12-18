@@ -34,7 +34,14 @@ console = Console()
 
 
 def _validate_api_key(api_key: str) -> bool:
-    """Validate an API key by making a lightweight API call."""
+    """Validate an API key by making a lightweight API call.
+
+    Args:
+        api_key: OpenAI API key to validate
+
+    Returns:
+        True if the key is valid, False otherwise
+    """
     import httpx
 
     try:
@@ -56,7 +63,11 @@ def _validate_api_key(api_key: str) -> bool:
 
 
 def _ensure_api_key() -> bool:
-    """Check for API key, validate it, and prompt if missing or invalid."""
+    """Check for API key, validate it, and prompt if missing or invalid.
+
+    Returns:
+        True if a valid API key is available, False otherwise
+    """
     import os
     from pathlib import Path
 
@@ -99,12 +110,16 @@ def _ensure_api_key() -> bool:
 
 
 def _apply_monkey_patch() -> None:
-    """Replace openai.OpenAI with SerixClient."""
+    """Replace openai.OpenAI with SerixClient for interception."""
     openai.OpenAI = SerixClient  # type: ignore[misc]
 
 
 def _run_script(script_path: Path) -> None:
-    """Execute a Python script with Serix interception enabled."""
+    """Execute a Python script with Serix interception enabled.
+
+    Args:
+        script_path: Path to the Python script to execute
+    """
     if not script_path.exists():
         console.print(f"[red]Error:[/red] Script not found: {script_path}")
         raise typer.Exit(1)
@@ -430,6 +445,15 @@ def test(
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
+    no_save: Annotated[
+        bool, typer.Option("--no-save", help="Disable auto-save of successful attacks")
+    ] = False,
+    no_fail_fast: Annotated[
+        bool,
+        typer.Option(
+            "--no-fail-fast", help="Continue running even if regression check fails"
+        ),
+    ] = False,
 ) -> None:
     """Test an agent with security scenarios.
 
@@ -541,6 +565,41 @@ def test(
 
     # Setup target and run attacks
     target_obj.setup()
+
+    # Import regression modules
+    from serix.regression.runner import RegressionRunner
+    from serix.regression.store import AttackStore, StoredAttack
+    from serix.report.console import (
+        print_attacks_saved,
+        print_immune_check_result,
+        print_immune_check_start,
+        print_regression_failure,
+    )
+
+    # Immune Check: replay stored attacks first
+    store = AttackStore()
+    stored_count = store.count()
+
+    if stored_count > 0:
+        print_immune_check_start(stored_count)
+        runner = RegressionRunner(store, attacker_client)
+        regression_result = runner.run_immune_check(
+            target=target_obj,
+            goal=final_goal,
+            fail_fast=not no_fail_fast,
+        )
+        print_immune_check_result(
+            regression_result.passed, regression_result.total_checked
+        )
+
+        if regression_result.failed > 0:
+            print_regression_failure(
+                regression_result.failed_attacks,
+                fail_fast=not no_fail_fast,
+            )
+            if not no_fail_fast:
+                raise typer.Exit(1)
+
     try:
         # Use adversary loop when scenarios are specified
         if scenarios:
@@ -688,6 +747,38 @@ def test(
                 preview = adversary_result.winning_payload[:80] + "..."
                 console.print(f"  • Winning payload: {preview}")
 
+            # Auto-save successful attacks for regression testing
+            if (
+                not no_save
+                and not evaluation.passed
+                and adversary_result.winning_payload
+            ):
+                vuln_type = (
+                    evaluation.vulnerabilities[0].type
+                    if evaluation.vulnerabilities
+                    else "unknown"
+                )
+                owasp = "LLM01"  # Default
+                if evaluation.vulnerabilities:
+                    # Try to get OWASP from vulnerability
+                    owasp = getattr(
+                        evaluation.vulnerabilities[0], "owasp_code", "LLM01"
+                    )
+
+                attack_to_save = StoredAttack.create(
+                    goal=final_goal,
+                    payload=adversary_result.winning_payload,
+                    vulnerability_type=vuln_type,
+                    agent_response=(
+                        adversary_result.conversation[-1].get("content", "")
+                        if adversary_result.conversation
+                        else ""
+                    ),
+                    owasp_code=owasp,
+                )
+                if store.save(attack_to_save):
+                    print_attacks_saved(1)
+
             # Generate remediations list (used for console display and reports)
             report_remediations: list | None = None
             if evaluation.vulnerabilities:
@@ -755,6 +846,22 @@ def test(
         )
         for atk in results.successful_attacks:
             console.print(f"  • {atk.strategy}: {atk.payload[:80]}...")
+
+        # Auto-save successful attacks for regression testing
+        if not no_save:
+            saved_count = 0
+            for atk in results.successful_attacks:
+                attack_to_save = StoredAttack.create(
+                    goal=final_goal,
+                    payload=atk.payload,
+                    vulnerability_type=atk.strategy,
+                    agent_response=atk.response or "",
+                    owasp_code="LLM01",
+                )
+                if store.save(attack_to_save):
+                    saved_count += 1
+            if saved_count > 0:
+                print_attacks_saved(saved_count)
     else:
         console.print(
             f"\n[green]✓[/green] Agent defended against {max_attempts} attacks"
