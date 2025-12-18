@@ -21,7 +21,14 @@ console = Console()
 
 
 def get_severity_color(severity: str) -> str:
-    """Get Rich color for severity level."""
+    """Get Rich color for severity level.
+
+    Args:
+        severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+
+    Returns:
+        Rich color string for the severity
+    """
     severity_colors = {
         "CRITICAL": "bold red",
         "HIGH": "bold orange1",
@@ -52,6 +59,23 @@ DANGEROUS_TOOL_KEYWORDS = {
 }
 
 
+def parse_mcp_tool(tool_name: str) -> tuple[str | None, str]:
+    """Parse 'mcp__server__tool' format into (server, tool).
+
+    Args:
+        tool_name: Tool name, possibly in MCP format
+
+    Returns:
+        Tuple of (server, tool) or (None, tool_name) if not MCP format
+    """
+    if tool_name.startswith("mcp__"):
+        # Format: mcp__server__tool_name
+        parts = tool_name[5:].split("__", 1)  # Remove "mcp__" prefix
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    return None, tool_name
+
+
 def is_dangerous_tool(tool_name: str) -> bool:
     """Check if a tool name indicates a dangerous/destructive operation.
 
@@ -63,7 +87,6 @@ def is_dangerous_tool(tool_name: str) -> bool:
     """
     name_lower = tool_name.lower()
 
-    # Check for dangerous keywords
     for keyword in DANGEROUS_TOOL_KEYWORDS:
         if keyword in name_lower:
             return True
@@ -80,6 +103,10 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
     """
     import json
 
+    # Parse MCP format if present
+    server, parsed_tool = parse_mcp_tool(tool_name)
+    is_mcp = server is not None
+
     # Format args for display
     args_str = ""
     if args:
@@ -88,16 +115,23 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
         except (TypeError, ValueError):
             args_str = str(args)
 
-    # Build the panel content
-    panel_lines = [
-        "[bold red]SERIX SANDBOX: BLOCKED DESTRUCTIVE ACTION[/bold red]",
-        "",
-        f"[bold yellow]Tool:[/bold yellow] {tool_name}",
-    ]
+    # Build the panel content with MCP-aware formatting
+    if is_mcp:
+        panel_lines = [
+            "[bold red]SERIX SANDBOX: BLOCKED MCP ACTION[/bold red]",
+            "",
+            f"[bold yellow]Server:[/bold yellow] {server}",
+            f"[bold yellow]Tool:[/bold yellow] {parsed_tool}",
+        ]
+    else:
+        panel_lines = [
+            "[bold red]SERIX SANDBOX: BLOCKED DESTRUCTIVE ACTION[/bold red]",
+            "",
+            f"[bold yellow]Tool:[/bold yellow] {tool_name}",
+        ]
 
     if args_str:
         panel_lines.append("[bold yellow]Args:[/bold yellow]")
-        # Truncate args if too long
         if len(args_str) > 200:
             args_str = args_str[:200] + "..."
         panel_lines.append(f"[dim]{args_str}[/dim]")
@@ -123,7 +157,7 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
 
 
 def print_banner() -> None:
-    """Print Serix banner."""
+    """Print Serix banner to console."""
     banner = """
 [bold cyan]  ____            _
  / ___|  ___ _ __(_)_  __
@@ -137,7 +171,11 @@ def print_banner() -> None:
 
 
 def print_recording_summary(session: RecordingSession) -> None:
-    """Print a summary of recorded interactions."""
+    """Print a summary of recorded interactions.
+
+    Args:
+        session: The recording session to summarize
+    """
     table = Table(title="Recording Summary", show_header=True, header_style="bold cyan")
     table.add_column("#", style="dim", width=4)
     table.add_column("Model", width=20)
@@ -165,7 +203,12 @@ def print_recording_summary(session: RecordingSession) -> None:
 
 
 def print_fuzz_result(result: FuzzResult, index: int) -> None:
-    """Print result of a single fuzz test."""
+    """Print result of a single fuzz test.
+
+    Args:
+        result: The fuzz test result
+        index: Test index for display
+    """
     if result.error_raised:
         status = "[red]ERROR[/red]"
         details = str(result.error_raised)
@@ -180,7 +223,11 @@ def print_fuzz_result(result: FuzzResult, index: int) -> None:
 
 
 def print_fuzz_summary(results: list[FuzzResult]) -> None:
-    """Print summary of fuzzing results."""
+    """Print summary of fuzzing results.
+
+    Args:
+        results: List of fuzz test results
+    """
     total = len(results)
     mutated = sum(1 for r in results if r.mutations_applied)
     errors = sum(1 for r in results if r.error_raised)
@@ -214,7 +261,12 @@ def print_fuzz_summary(results: list[FuzzResult]) -> None:
 def print_critical_vulnerability(
     attack: Attack, vulnerability_type: str = "jailbreak"
 ) -> None:
-    """Print dramatic vulnerability alert for demo with OWASP information."""
+    """Print dramatic vulnerability alert for demo with OWASP information.
+
+    Args:
+        attack: The successful attack to display
+        vulnerability_type: Type of vulnerability for OWASP lookup
+    """
     from serix.eval.classifier import get_owasp_info
 
     # Get OWASP info based on attack strategy/type
@@ -254,7 +306,12 @@ def print_critical_vulnerability(
 def print_attack_results(
     results: AttackResults, vulnerability_type: str = "jailbreak"
 ) -> None:
-    """Print red team attack results with OWASP classification."""
+    """Print red team attack results with OWASP classification.
+
+    Args:
+        results: Attack results to display
+        vulnerability_type: Type of vulnerability for OWASP lookup
+    """
     from serix.eval.classifier import get_owasp_info
 
     owasp = get_owasp_info(vulnerability_type)
@@ -323,10 +380,6 @@ MAX_DIFF_LINES_CLI = 50
 
 def print_healing_result(healing: "HealingResult") -> None:
     """Print healing result with diff and tool fixes.
-
-    Displays:
-    - Text fix with syntax-highlighted unified diff
-    - Tool fix recommendations with severity badges
 
     Args:
         healing: HealingResult from the Self-Healing engine
@@ -417,8 +470,6 @@ def print_healing_result(healing: "HealingResult") -> None:
 def print_healing_summary(healing: "HealingResult") -> None:
     """Print a compact summary of healing result.
 
-    Use this for inline display after vulnerability alerts.
-
     Args:
         healing: HealingResult from the Self-Healing engine
     """
@@ -434,3 +485,83 @@ def print_healing_summary(healing: "HealingResult") -> None:
     fix_count += len(healing.tool_fixes)
 
     console.print(f"[dim]({fix_count} recommendations)[/dim]")
+
+
+# Regression testing output functions
+
+
+def print_immune_check_start(count: int) -> None:
+    """Print the start of the Immune Check phase.
+
+    Args:
+        count: Number of stored attacks to replay
+    """
+    console.print()
+    console.print(
+        f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} stored attack(s)..."
+    )
+
+
+def print_immune_check_result(passed: int, total: int) -> None:
+    """Print the result of the Immune Check.
+
+    Args:
+        passed: Number of attacks defended
+        total: Total attacks checked
+    """
+    if passed == total:
+        console.print(
+            f"[green]✓ {passed}/{total} defended[/green] "
+            "[dim](previously vulnerable payloads)[/dim]"
+        )
+    else:
+        failed = total - passed
+        console.print(f"[red]✗ {failed}/{total} still vulnerable[/red]")
+
+
+def print_regression_failure(
+    failed_attacks: list,
+    fail_fast: bool = True,
+) -> None:
+    """Print detailed regression failure information.
+
+    Args:
+        failed_attacks: List of StoredAttack objects that still succeed
+        fail_fast: Whether we stopped early due to fail-fast
+    """
+    console.print()
+    console.print(
+        Panel(
+            "[bold red]REGRESSION DETECTED[/bold red]",
+            border_style="red",
+            padding=(0, 2),
+        )
+    )
+
+    for attack in failed_attacks[:3]:  # Show max 3
+        console.print()
+        console.print(f"[bold yellow]Attack:[/bold yellow] {attack.id}")
+        payload_preview = (
+            attack.payload[:80] + "..." if len(attack.payload) > 80 else attack.payload
+        )
+        console.print(f"[bold yellow]Payload:[/bold yellow] {payload_preview}")
+        console.print("[bold yellow]Status:[/bold yellow] [red]STILL VULNERABLE[/red]")
+
+    if len(failed_attacks) > 3:
+        console.print(f"\n[dim]...and {len(failed_attacks) - 3} more[/dim]")
+
+    console.print()
+    if fail_fast:
+        console.print("[dim]Fix these regressions before running new attacks.[/dim]")
+
+
+def print_attacks_saved(count: int) -> None:
+    """Print confirmation of saved attacks.
+
+    Args:
+        count: Number of attacks saved
+    """
+    if count > 0:
+        console.print(
+            f"\n[dim]📦 Saved {count} new attack(s) to .serix/attacks.json[/dim]"
+        )
