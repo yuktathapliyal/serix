@@ -337,6 +337,16 @@ def attack(
         )
         raise typer.Exit(1)
 
+    # Bail early if script doesn't exist or isn't a Python file
+    final_script = Path(final_script)
+    if not final_script.exists():
+        console.print(f"[red]Error:[/red] Script not found: {final_script}")
+        raise typer.Exit(1)
+
+    if not final_script.suffix == ".py":
+        console.print(f"[red]Error:[/red] Not a Python file: {final_script}")
+        raise typer.Exit(1)
+
     console.print(f"[bold violet]Serix[/bold violet] Attacking {final_script}")
     console.print(f"[yellow]Goal:[/yellow] {final_goal}")
 
@@ -565,6 +575,15 @@ def test(
 
     # Setup target and run attacks
     target_obj.setup()
+
+    # Verify HTTP targets are reachable before wasting API calls
+    if isinstance(target_obj, HttpTarget):
+        try:
+            target_obj.verify_connectivity()
+        except ConnectionError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("\nMake sure your HTTP server is running.")
+            raise typer.Exit(1)
 
     # Import regression modules
     from serix.regression.runner import RegressionRunner
