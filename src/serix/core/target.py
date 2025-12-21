@@ -216,6 +216,45 @@ class HttpTarget(Target):
         """Initialize HTTP client."""
         self._client = httpx.Client(timeout=self.timeout)
 
+    def verify_connectivity(self) -> None:
+        """Check if HTTP target is reachable before attacking.
+
+        Tries HEAD request first. Treats 405 as success (server is up).
+        Only fails on actual connection errors.
+
+        Raises:
+            ConnectionError: If server is unreachable or times out.
+        """
+        if not self._client:
+            self._client = httpx.Client(timeout=self.timeout)
+
+        try:
+            # HEAD is lightweight; any response means server is up
+            self._client.head(self.url, timeout=5.0)
+            return
+
+        except httpx.HTTPStatusError as e:
+            # 405 = server up but doesn't support HEAD, that's fine
+            if e.response.status_code == 405:
+                return
+            # Other HTTP errors still mean server is reachable
+            return
+
+        except httpx.ConnectError as e:
+            raise ConnectionError(
+                f"Cannot connect to {self.url}\n"
+                f"Connection refused - is the server running?"
+            ) from e
+
+        except httpx.ConnectTimeout as e:
+            raise ConnectionError(
+                f"Connection to {self.url} timed out\n"
+                f"Server may be slow or unreachable."
+            ) from e
+
+        except httpx.TimeoutException as e:
+            raise ConnectionError(f"Request to {self.url} timed out") from e
+
     def teardown(self) -> None:
         """Close HTTP client."""
         if self._client:
@@ -286,6 +325,14 @@ class HttpTarget(Target):
                     raw_response=response,
                 )
 
+        except httpx.ConnectError as e:
+            # Connection errors should fail loudly, not silently
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            return TargetResponse(
+                content="",
+                error=f"CONNECTION_REFUSED: {e}",
+                latency_ms=latency_ms,
+            )
         except httpx.TimeoutException:
             latency_ms = (time.perf_counter() - start_time) * 1000
             return TargetResponse(
