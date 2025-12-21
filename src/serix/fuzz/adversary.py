@@ -62,6 +62,7 @@ class AdversaryResult:
         confidence: Confidence level of the final verdict
         judge_reasoning: Judge's explanation for the verdict
         healing: Fix suggestions if attack succeeded
+        attempts_log: Summary of all persona attempts for reporting
     """
 
     success: bool
@@ -73,6 +74,7 @@ class AdversaryResult:
     confidence: str = "medium"
     judge_reasoning: str = ""
     healing: "HealingResult | None" = None
+    attempts_log: list[dict] = field(default_factory=list)
 
 
 # Critic system prompt for analyzing responses
@@ -476,6 +478,7 @@ class AdversaryLoop:
         self,
         target: "Target",
         goal: str,
+        stop_on_success: bool = True,
     ) -> list[AdversaryResult]:
         """Run attacks with all available personas.
 
@@ -484,6 +487,8 @@ class AdversaryLoop:
         Args:
             target: Target to attack
             goal: Attack goal description
+            stop_on_success: If True, stop after first successful attack.
+                If False, run all personas for comprehensive reporting.
 
         Returns:
             List of AdversaryResults, one per persona
@@ -495,8 +500,8 @@ class AdversaryLoop:
             result = self.attack(target, goal, persona)
             results.append(result)
 
-            # Early exit if we found a vulnerability
-            if result.success:
+            # Early exit only if requested
+            if stop_on_success and result.success:
                 if self.verbose:
                     console.print("[red]Vulnerability found! Stopping.[/red]")
                 break

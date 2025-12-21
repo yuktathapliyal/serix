@@ -297,6 +297,9 @@ class EvaluationReportData:
 
     healing: HealingReportData | None = None
 
+    # Campaign summary: all persona attempts
+    attempts_log: list[dict] = field(default_factory=list)
+
     # Report type indicator (for template)
     is_evaluation_report: bool = True
 
@@ -503,6 +506,7 @@ def create_evaluation_report_data(
         turns_taken=adversary_result.turns_taken,
         confidence=adversary_result.confidence,
         healing=healing_data,
+        attempts_log=getattr(adversary_result, "attempts_log", []),
     )
 
 

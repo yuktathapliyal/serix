@@ -531,8 +531,43 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_critic=on_critic,
         )
 
-        # Run attack
-        result = loop.attack(target, goal)
+        # Run all personas for comprehensive reporting
+        results = loop.attack_with_all_personas(target, goal, stop_on_success=False)
+
+        # Build attempts log for reporting
+        attempts_log = [
+            {
+                "persona": r.persona_used,
+                "success": r.success,
+                "turns": r.turns_taken,
+                "reason": (r.judge_reasoning[:100] if r.judge_reasoning else ""),
+            }
+            for r in results
+        ]
+
+        # Pick first success, or last result if all failed
+        result = next(
+            (r for r in results if r.success), results[-1] if results else None
+        )
+
+        if result is None:
+            # Edge case: no results at all
+            from serix.fuzz.adversary import AdversaryResult
+
+            result = AdversaryResult(
+                success=False,
+                turns_taken=0,
+                persona_used="none",
+                conversation=[],
+                winning_payload=None,
+                vulnerability_type=None,
+                confidence="low",
+                judge_reasoning="No personas executed",
+                attempts_log=[],
+            )
+        else:
+            # Attach full campaign log to the result
+            result.attempts_log = attempts_log
 
         # Generate fix suggestions if attack succeeded
         if result.success and system_prompt:

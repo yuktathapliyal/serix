@@ -1299,6 +1299,36 @@
         </div>
         {% endif %}
 
+        {% if report.attempts_log %}
+        <!-- Attack Campaign Summary -->
+        <div class="section">
+            <h3>Attack Campaign Summary</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                {{ report.attempts_log | length }} persona(s) attempted
+            </p>
+            <div class="attacks-table">
+                <div class="table-header" style="grid-template-columns: 150px 100px 80px 1fr;">
+                    <div>Persona</div>
+                    <div>Status</div>
+                    <div>Turns</div>
+                    <div>Reasoning</div>
+                </div>
+                {% for attempt in report.attempts_log %}
+                <div class="table-row" style="grid-template-columns: 150px 100px 80px 1fr;">
+                    <div>{{ attempt.persona | capitalize }}</div>
+                    <div>
+                        <span class="badge {{ 'exploited' if attempt.success else 'defended' }}">
+                            {{ 'Exploited' if attempt.success else 'Defended' }}
+                        </span>
+                    </div>
+                    <div>{{ attempt.turns }}</div>
+                    <div class="payload-preview">{{ attempt.reason | truncate(100) }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if report.remediations %}
         <!-- Remediations -->
         <div class="section">
