@@ -522,12 +522,14 @@ def print_immune_check_result(passed: int, total: int) -> None:
 def print_regression_failure(
     failed_attacks: list,
     fail_fast: bool = True,
+    will_prompt: bool = False,
 ) -> None:
     """Print detailed regression failure information.
 
     Args:
         failed_attacks: List of StoredAttack objects that still succeed
         fail_fast: Whether we stopped early due to fail-fast
+        will_prompt: If True, user will be prompted to continue (skip tip message)
     """
     console.print()
     console.print(
@@ -551,12 +553,14 @@ def print_regression_failure(
         console.print(f"\n[dim]...and {len(failed_attacks) - 3} more[/dim]")
 
     console.print()
-    if fail_fast:
+
+    # Don't show tip if we're about to prompt the user
+    if fail_fast and not will_prompt:
         console.print(
             "[dim]Tip: This agent is still vulnerable to a previous attack.[/dim]"
         )
         console.print(
-            "[dim]     Run with --force to continue with new tests anyway.[/dim]"
+            "[dim]     Run with --no-fail-fast to continue with new tests anyway.[/dim]"
         )
 
 

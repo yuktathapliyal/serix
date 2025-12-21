@@ -33,6 +33,14 @@ app = typer.Typer(
 console = Console()
 
 
+def _is_interactive() -> bool:
+    """Check if running in an interactive terminal (TTY).
+
+    Returns True for local dev (terminal), False for CI/piped output.
+    """
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
 def _validate_api_key(api_key: str) -> bool:
     """Validate an API key by making a lightweight API call.
 
@@ -643,12 +651,24 @@ def test(
         )
 
         if regression_result.failed > 0:
+            # Determine if we should prompt or fail
+            should_prompt = _is_interactive() and not no_fail_fast
+
             print_regression_failure(
                 regression_result.failed_attacks,
                 fail_fast=not no_fail_fast,
+                will_prompt=should_prompt,
             )
+
             if not no_fail_fast:
-                raise typer.Exit(1)
+                if should_prompt:
+                    # Interactive mode: ask user if they want to continue
+                    if not typer.confirm("Continue with new tests?", default=True):
+                        raise typer.Exit(1)
+                    console.print()  # Visual spacing after prompt
+                else:
+                    # Non-interactive (CI): fail immediately
+                    raise typer.Exit(1)
 
     try:
         # Use adversary loop when scenarios are specified
