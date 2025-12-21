@@ -50,7 +50,8 @@ class FuzzConfig(BaseModel):
 class TargetConfig(BaseModel):
     """Configuration for target scripts."""
 
-    script: str | None = None
+    target: str | None = None  # Full target: file.py:function or http://url
+    script: str | None = None  # Legacy: just the script file (for attack command)
     working_dir: str | None = None
 
 
