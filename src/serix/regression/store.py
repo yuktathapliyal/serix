@@ -12,27 +12,36 @@ from uuid import uuid4
 
 @dataclass
 class StoredAttack:
-    """A successful attack stored for regression testing.
+    """A stored attack for regression testing.
+
+    Tracks attacks discovered during testing and their current status.
+    Status can change as the agent is patched and re-tested.
 
     Attributes:
         id: Unique identifier (UUID)
-        timestamp: ISO format timestamp when attack was discovered
-        goal: The attack goal that was achieved
-        payload: The exact prompt that broke the agent
+        payload: The exact prompt used in the attack
         payload_hash: SHA256 hash of payload for deduplication
+        goal: The attack goal that was attempted
         vulnerability_type: Category (jailbreak, pii_leak, injection, etc.)
-        agent_response: The vulnerable response from the agent
         owasp_code: OWASP classification (LLM01, LLM02, etc.)
+        first_exploited_at: ISO timestamp when attack first succeeded
+        last_verified_at: ISO timestamp of last Immune Check
+        current_status: 'exploited' or 'defended'
+        judge_reasoning: Latest reasoning from judge LLM
+        agent_response: The agent's response to the attack
     """
 
     id: str
-    timestamp: str
-    goal: str
     payload: str
     payload_hash: str
+    goal: str
     vulnerability_type: str
-    agent_response: str
     owasp_code: str
+    first_exploited_at: str
+    last_verified_at: str
+    current_status: str  # 'exploited' or 'defended'
+    judge_reasoning: str
+    agent_response: str
 
     @classmethod
     def create(
@@ -42,21 +51,26 @@ class StoredAttack:
         vulnerability_type: str,
         agent_response: str,
         owasp_code: str = "LLM01",
+        judge_reasoning: str = "",
     ) -> "StoredAttack":
-        """Create a new StoredAttack with auto-generated id, timestamp, and hash.
+        """Create a new StoredAttack with auto-generated id and timestamps.
 
         Returns:
             StoredAttack instance ready for storage
         """
+        now = datetime.now().isoformat()
         return cls(
             id=str(uuid4())[:8],
-            timestamp=datetime.now().isoformat(),
-            goal=goal,
             payload=payload,
             payload_hash=hashlib.sha256(payload.encode()).hexdigest(),
+            goal=goal,
             vulnerability_type=vulnerability_type,
-            agent_response=agent_response,
             owasp_code=owasp_code,
+            first_exploited_at=now,
+            last_verified_at=now,
+            current_status="exploited",
+            judge_reasoning=judge_reasoning,
+            agent_response=agent_response,
         )
 
 
@@ -93,8 +107,14 @@ class AttackStore:
         self._write(existing)
         return True
 
-    def load_all(self) -> list[StoredAttack]:
-        """Load all stored attacks.
+    def load_all(self, skip_mitigated: bool = False) -> list[StoredAttack]:
+        """Load all stored attacks with automatic schema migration.
+
+        Migrates legacy attacks (pre-v0.2.5) to new schema on load.
+        Legacy fields: timestamp → first_exploited_at, adds current_status etc.
+
+        Args:
+            skip_mitigated: If True, only return attacks with status 'exploited'
 
         Returns:
             List of all attacks, empty if none exist
@@ -105,9 +125,46 @@ class AttackStore:
         try:
             with open(self.path) as f:
                 data = json.load(f)
-            return [StoredAttack(**item) for item in data]
+
+            attacks = []
+            needs_migration = False
+
+            for item in data:
+                # Migrate legacy schema if needed
+                if "timestamp" in item and "first_exploited_at" not in item:
+                    needs_migration = True
+                    item = self._migrate_legacy(item)
+
+                attacks.append(StoredAttack(**item))
+
+            # Write migrated data back if we updated any records
+            if needs_migration:
+                self._write(attacks)
+
+            # Filter if skip_mitigated requested
+            if skip_mitigated:
+                attacks = [a for a in attacks if a.current_status == "exploited"]
+
+            return attacks
         except (json.JSONDecodeError, KeyError, TypeError):
             return []
+
+    def _migrate_legacy(self, item: dict) -> dict:
+        """Migrate a legacy attack record to new schema."""
+        timestamp = item.pop("timestamp", datetime.now().isoformat())
+        return {
+            "id": item.get("id", str(uuid4())[:8]),
+            "payload": item.get("payload", ""),
+            "payload_hash": item.get("payload_hash", ""),
+            "goal": item.get("goal", ""),
+            "vulnerability_type": item.get("vulnerability_type", "unknown"),
+            "owasp_code": item.get("owasp_code", "LLM01"),
+            "first_exploited_at": timestamp,
+            "last_verified_at": timestamp,
+            "current_status": "exploited",  # Assume exploited for legacy
+            "judge_reasoning": "",
+            "agent_response": item.get("agent_response", ""),
+        }
 
     def load_by_type(self, vuln_type: str) -> list[StoredAttack]:
         """Load attacks filtered by vulnerability type.
@@ -136,6 +193,18 @@ class AttackStore:
         with open(self.path, "w") as f:
             json.dump([asdict(a) for a in attacks], f, indent=2)
 
+    def update(self, attack: StoredAttack) -> None:
+        """Update an attack in-place by ID.
+
+        Used to update status after Immune Check.
+        """
+        attacks = self.load_all()
+        for i, a in enumerate(attacks):
+            if a.id == attack.id:
+                attacks[i] = attack
+                break
+        self._write(attacks)
+
     def _prune_old(
         self, attacks: list[StoredAttack], max_per_type: int = 100
     ) -> list[StoredAttack]:
@@ -147,11 +216,11 @@ class AttackStore:
                 by_type[attack.vulnerability_type] = []
             by_type[attack.vulnerability_type].append(attack)
 
-        # Keep latest N per type (sorted by timestamp)
+        # Keep latest N per type (sorted by first_exploited_at)
         result: list[StoredAttack] = []
         for vuln_type, type_attacks in by_type.items():
             sorted_attacks = sorted(
-                type_attacks, key=lambda a: a.timestamp, reverse=True
+                type_attacks, key=lambda a: a.first_exploited_at, reverse=True
             )
             result.extend(sorted_attacks[:max_per_type])
 
