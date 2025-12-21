@@ -62,7 +62,7 @@ jobs:
         run: uv sync
 
       - name: Run tests
-        run: uv run pytest tests/ -v --tb=short || echo "No tests found, skipping"
+        run: uv run pytest tests/ -v --tb=short
 
   build:
     runs-on: ubuntu-latest
