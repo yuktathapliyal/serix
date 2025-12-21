@@ -550,6 +550,30 @@ def test(
             help="Skip attacks that have been mitigated (faster runs)",
         ),
     ] = False,
+    # Fuzzing parameters
+    fuzz: Annotated[
+        bool,
+        typer.Option("--fuzz", help="Enable fuzzing (latency + JSON corruption)"),
+    ] = False,
+    fuzz_latency: Annotated[
+        bool,
+        typer.Option("--fuzz-latency", help="Inject latency delays (5s)"),
+    ] = False,
+    fuzz_errors: Annotated[
+        bool,
+        typer.Option("--fuzz-errors", help="Inject API errors (500/503/429)"),
+    ] = False,
+    fuzz_json: Annotated[
+        bool,
+        typer.Option("--fuzz-json", help="Corrupt JSON responses"),
+    ] = False,
+    fuzz_probability: Annotated[
+        float,
+        typer.Option(
+            "--fuzz-probability",
+            help="Mutation probability 0.0-1.0 (default: 0.5)",
+        ),
+    ] = 0.5,
 ) -> None:
     """Test an agent with security scenarios.
 
@@ -598,6 +622,18 @@ def test(
         Path(file_config.attack.report) if file_config.attack.report else None
     )
     final_verbose = verbose or file_config.verbose
+
+    # Build fuzz config if any fuzz flag is set
+    fuzz_config = None
+    if fuzz or fuzz_latency or fuzz_errors or fuzz_json:
+        from serix.core.types import FuzzConfig
+
+        fuzz_config = FuzzConfig(
+            enable_latency=fuzz or fuzz_latency,
+            enable_errors=fuzz_errors,  # Only if explicitly requested
+            enable_json_corruption=fuzz or fuzz_json,
+            mutation_probability=fuzz_probability,
+        )
 
     # Validate target
     if final_target is None:
@@ -721,6 +757,25 @@ def test(
 
     # Setup target and run attacks
     target_obj.setup()
+
+    # Apply fuzzing if configured
+    if fuzz_config:
+        serix_cfg = SerixConfig(
+            mode=SerixMode.FUZZ,
+            fuzz=fuzz_config,
+            verbose=final_verbose,
+        )
+        set_serix_config(serix_cfg)
+        mutations = []
+        if fuzz_config.enable_latency:
+            mutations.append("latency")
+        if fuzz_config.enable_errors:
+            mutations.append("errors")
+        if fuzz_config.enable_json_corruption:
+            mutations.append("json")
+        console.print(
+            f"[yellow]Fuzzing:[/yellow] {', '.join(mutations)} @ {fuzz_config.mutation_probability:.0%}"
+        )
 
     # Verify HTTP targets are reachable before wasting API calls
     if isinstance(target_obj, HttpTarget):
