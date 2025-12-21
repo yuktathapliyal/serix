@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Callable
 from openai import OpenAI
 from rich.console import Console
 
+from serix.core.config_loader import get_models
+
 if TYPE_CHECKING:
     from serix.core.target import Target
     from serix.fuzz.adversary import AdversaryResult
@@ -135,8 +137,8 @@ class RedTeamEngine:
     def __init__(
         self,
         client: OpenAI,
-        model: str = "gpt-4o-mini",
-        judge_model: str = "gpt-4o",
+        model: str | None = None,
+        judge_model: str | None = None,
         verbose: bool = False,
     ) -> None:
         """
@@ -144,13 +146,14 @@ class RedTeamEngine:
 
         Args:
             client: The ORIGINAL (unpatched) OpenAI client for the attacker
-            model: Model to use for generating attacks
-            judge_model: Model to use for impartial judging (default: gpt-4o)
+            model: Model for attacks (default: from serix.toml or gpt-4o-mini)
+            judge_model: Model for judging (default: from serix.toml or gpt-4o)
             verbose: Enable verbose output
         """
+        models = get_models()
         self.client = client
-        self.model = model
-        self.judge_model = judge_model
+        self.model = model or models.attacker
+        self.judge_model = judge_model or models.judge
         self.verbose = verbose
 
     def _generate_dynamic_attack(self, goal: str, attempt: int) -> str:

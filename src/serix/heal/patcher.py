@@ -10,10 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from openai import OpenAI
 
+from serix.core.config_loader import get_models
 from serix.heal.types import AnalysisResult, TextFix, ToolFix
-
-# Default model for patching (code generation - needs high intelligence)
-DEFAULT_PATCHER_MODEL = "gpt-4o"
 
 PATCHER_SYSTEM_PROMPT = """You are a security expert specializing in AI agent hardening.
 
@@ -66,7 +64,8 @@ class PromptPatcher:
             llm_client: OpenAI client for LLM calls
         """
         self.llm = llm_client
-        self.model = os.getenv("SERIX_HEAL_PATCHER_MODEL", DEFAULT_PATCHER_MODEL)
+        # Priority: env var > serix.toml > hardcoded default
+        self.model = os.getenv("SERIX_HEAL_PATCHER_MODEL") or get_models().patcher
 
     def generate_text_fix(
         self,

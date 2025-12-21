@@ -188,7 +188,6 @@ class ManipulatorPersona(AttackPersona):
             config = PersonaConfig(
                 name="Manipulator",
                 description="Triggers unauthorized actions, code execution, and tool abuse",
-                model="gpt-4o-mini",
                 temperature=0.8,
                 max_tokens=600,
             )

@@ -134,7 +134,6 @@ class ConfuserPersona(AttackPersona):
             config = PersonaConfig(
                 name="Confuser",
                 description="Causes hallucinations, contradictions, and unreliable responses",
-                model="gpt-4o-mini",
                 temperature=0.9,
                 max_tokens=600,
             )

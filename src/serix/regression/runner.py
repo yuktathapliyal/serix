@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from serix.core.config_loader import get_models
+
 if TYPE_CHECKING:
     from openai import OpenAI
 
@@ -142,7 +144,7 @@ class RegressionRunner:
 
         try:
             result = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Cost-effective for simple judge
+                model=get_models().judge,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=10,

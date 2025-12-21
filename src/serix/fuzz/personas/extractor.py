@@ -127,7 +127,6 @@ class ExtractorPersona(AttackPersona):
             config = PersonaConfig(
                 name="Extractor",
                 description="Extracts sensitive information like prompts, credentials, and PII",
-                model="gpt-4o-mini",
                 temperature=0.8,
                 max_tokens=500,
             )

@@ -15,13 +15,23 @@ console = Console()
 CONFIG_FILES = ["serix.toml", ".serix.toml", "pyproject.toml"]
 
 
+class ModelConfig(BaseModel):
+    """Model configuration for all Serix components."""
+
+    attacker: str = "gpt-4o-mini"  # Generates attacks (cost-effective, runs many times)
+    judge: str = "gpt-4o"  # Impartial evaluator (accuracy matters, runs once)
+    critic: str = "gpt-4o-mini"  # Per-turn analysis in adversary loop
+    patcher: str = "gpt-4o"  # Self-healing prompt generation
+    analyzer: str = "gpt-4o-mini"  # Vulnerability classification
+
+
 class AttackConfig(BaseModel):
     """Configuration for red team attacks."""
 
     goal: str | None = None
     max_attempts: int = 10
-    judge_model: str = "gpt-4o"
-    model: str = "gpt-4o-mini"
+    judge_model: str | None = None  # Deprecated: use [models].judge instead
+    model: str | None = None  # Deprecated: use [models].attacker instead
     report: str | None = None
     stop_on_first: bool = True
 
@@ -50,6 +60,7 @@ class SerixFileConfig(BaseModel):
     target: TargetConfig = Field(default_factory=TargetConfig)
     attack: AttackConfig = Field(default_factory=AttackConfig)
     fuzz: FuzzConfig = Field(default_factory=FuzzConfig)
+    models: ModelConfig = Field(default_factory=ModelConfig)
     verbose: bool = False
 
 
@@ -161,3 +172,33 @@ def merge_config_with_cli(
                 merged[key] = value
 
     return merged
+
+
+# Cached config for get_models() singleton
+_cached_config: SerixFileConfig | None = None
+
+
+def get_models() -> ModelConfig:
+    """Get model configuration from serix.toml (cached singleton).
+
+    Loads config once and caches it. Falls back to defaults if no config file.
+    Also respects legacy [attack].model and [attack].judge_model if set.
+    """
+    global _cached_config
+
+    if _cached_config is None:
+        _cached_config = load_config()
+
+        # Backward compat: if legacy attack.model/judge_model are set, use them
+        if _cached_config.attack.model:
+            _cached_config.models.attacker = _cached_config.attack.model
+        if _cached_config.attack.judge_model:
+            _cached_config.models.judge = _cached_config.attack.judge_model
+
+    return _cached_config.models
+
+
+def reset_model_cache() -> None:
+    """Reset the cached config. Useful for testing."""
+    global _cached_config
+    _cached_config = None

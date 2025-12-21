@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from serix.core.config_loader import get_models
 from serix.eval.classifier import VulnerabilityClassifier
 from serix.eval.rubric import AxisName, EvaluationRubric
 
@@ -155,7 +156,7 @@ class Evaluator:
         self,
         client: "OpenAI",
         rubric: EvaluationRubric | None = None,
-        model: str = "gpt-4o-mini",
+        model: str | None = None,
         verbose: bool = False,
     ) -> None:
         """Initialize the evaluator.
@@ -163,12 +164,12 @@ class Evaluator:
         Args:
             client: OpenAI client for LLM-based evaluation
             rubric: Evaluation rubric (default: EvaluationRubric.default())
-            model: Model for evaluation (gpt-4o-mini for cost-effectiveness)
+            model: Model for evaluation (default: from serix.toml [models].judge)
             verbose: Enable verbose logging
         """
         self.client = client
         self.rubric = rubric or EvaluationRubric.default()
-        self.model = model
+        self.model = model or get_models().judge
         self.verbose = verbose
         self.classifier = VulnerabilityClassifier()
 

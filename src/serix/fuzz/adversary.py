@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable
 
 from rich.console import Console
 
+from serix.core.config_loader import get_models
 from serix.fuzz.personas import AttackContext, AttackPersona
 
 if TYPE_CHECKING:
@@ -158,16 +159,18 @@ class AdversaryLoop:
 
     Token Burn Protection:
     - Default max_turns=3 for development
-    - Uses gpt-4o-mini for Critic (runs N times)
-    - Uses gpt-4o for Judge (runs once)
+    - Critic model runs N times (cost-effective model)
+    - Judge model runs once (accuracy-focused model)
+
+    Model configuration via serix.toml [models] section.
     """
 
     def __init__(
         self,
         attacker_client: "OpenAI",
         personas: list[AttackPersona],
-        judge_model: str = "gpt-4o",
-        critic_model: str = "gpt-4o-mini",
+        judge_model: str | None = None,
+        critic_model: str | None = None,
         max_turns: int = 3,
         verbose: bool = False,
         # Callbacks for live UI integration
@@ -181,8 +184,8 @@ class AdversaryLoop:
         Args:
             attacker_client: OpenAI client for Critic and Judge
             personas: List of personas to use (cycles through them)
-            judge_model: Model for final verdict (default: gpt-4o for accuracy)
-            critic_model: Model for turn-by-turn analysis (default: gpt-4o-mini for cost)
+            judge_model: Model for final verdict (default: from serix.toml)
+            critic_model: Model for turn-by-turn analysis (default: from serix.toml)
             max_turns: Maximum attack turns (default: 3 for token burn protection)
             verbose: Enable verbose logging
             on_turn: Callback when a new turn starts
@@ -190,10 +193,11 @@ class AdversaryLoop:
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
         """
+        models = get_models()
         self.client = attacker_client
         self.personas = personas
-        self.judge_model = judge_model
-        self.critic_model = critic_model
+        self.judge_model = judge_model or models.judge
+        self.critic_model = critic_model or models.critic
         self.max_turns = max_turns
         self.verbose = verbose
         # Callbacks for live UI

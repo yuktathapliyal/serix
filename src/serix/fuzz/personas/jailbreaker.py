@@ -127,7 +127,6 @@ class JailbreakerPersona(AttackPersona):
             config = PersonaConfig(
                 name="Jailbreaker",
                 description="Bypasses AI safety guidelines using proven jailbreak techniques",
-                model="gpt-4o-mini",
                 temperature=0.9,
                 max_tokens=800,  # Jailbreaks can be long
             )

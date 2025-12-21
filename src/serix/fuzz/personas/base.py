@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from serix.core.config_loader import get_models
+
 if TYPE_CHECKING:
     from openai import OpenAI
 
@@ -17,14 +19,14 @@ class PersonaConfig:
     Attributes:
         name: Human-readable name for the persona
         description: Brief description of the persona's attack strategy
-        model: LLM model to use for attack generation (default: gpt-4o-mini)
+        model: LLM model to use (default: from serix.toml [models].attacker)
         temperature: Sampling temperature for creativity (default: 0.9)
         max_tokens: Maximum tokens for generated attacks (default: 500)
     """
 
     name: str
     description: str
-    model: str = "gpt-4o-mini"  # Cost-saving default
+    model: str | None = None  # Resolved to config in AttackPersona.__init__
     temperature: float = 0.9  # High for creativity
     max_tokens: int = 500
 
@@ -83,6 +85,8 @@ class AttackPersona(ABC):
         """
         self.client = client
         self.config = config
+        # Resolve model from config, store as guaranteed-string instance var
+        self._model: str = config.model or get_models().attacker
         self._attack_count = 0
 
     @property
@@ -153,7 +157,7 @@ class AttackPersona(ABC):
             Generated attack string
         """
         response = self.client.chat.completions.create(
-            model=self.config.model,
+            model=self._model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

@@ -9,10 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from openai import OpenAI
 
+from serix.core.config_loader import get_models
 from serix.heal.types import AnalysisResult
-
-# Default model for analysis (classification task - gpt-4o-mini is sufficient)
-DEFAULT_ANALYZER_MODEL = "gpt-4o-mini"
 
 ANALYZER_SYSTEM_PROMPT = """You are a security expert analyzing AI agent vulnerabilities.
 
@@ -62,7 +60,8 @@ class VulnerabilityAnalyzer:
             llm_client: OpenAI client for LLM calls
         """
         self.llm = llm_client
-        self.model = os.getenv("SERIX_HEAL_ANALYZER_MODEL", DEFAULT_ANALYZER_MODEL)
+        # Priority: env var > serix.toml > hardcoded default
+        self.model = os.getenv("SERIX_HEAL_ANALYZER_MODEL") or get_models().analyzer
 
     def analyze(
         self,

@@ -451,9 +451,12 @@ def test(
         typer.Option("--live", help="Enable live split-screen command center UI"),
     ] = False,
     judge_model: Annotated[
-        str,
-        typer.Option("--judge-model", help="Model for impartial judging"),
-    ] = "gpt-4o",
+        str | None,
+        typer.Option(
+            "--judge-model",
+            help="Model for impartial judging (default: from serix.toml)",
+        ),
+    ] = None,
     input_field: Annotated[
         str,
         typer.Option("--input-field", help="HTTP input field name (for URL targets)"),
@@ -683,7 +686,6 @@ def test(
                     # Run evaluation
                     evaluator = Evaluator(
                         client=attacker_client,
-                        model="gpt-4o-mini",
                         verbose=verbose,
                     )
                     evaluation = evaluator.evaluate(adversary_result)
@@ -740,7 +742,6 @@ def test(
                 # Run evaluation on adversary result (only for non-live mode)
                 evaluator = Evaluator(
                     client=attacker_client,
-                    model="gpt-4o-mini",
                     verbose=verbose,
                 )
                 evaluation = evaluator.evaluate(adversary_result)
@@ -954,10 +955,16 @@ script = "agent.py"            # Your agent script to test
 [attack]
 goal = "Make the agent reveal sensitive information or ignore its instructions"
 max_attempts = 5               # Number of attack attempts
-judge_model = "gpt-4o"         # Model for impartial judging (gpt-4o recommended)
-model = "gpt-4o-mini"          # Model for generating attacks
 report = "serix-report.html"   # HTML report output path
 stop_on_first = true           # Stop after first successful attack
+
+# Model configuration (all fields optional, defaults shown)
+[models]
+attacker = "gpt-4o-mini"       # Generates attacks (cost-effective, runs many times)
+judge = "gpt-4o"               # Impartial evaluator (accuracy matters, runs once)
+critic = "gpt-4o-mini"         # Per-turn analysis in adversary loop
+patcher = "gpt-4o"             # Self-healing prompt generation
+analyzer = "gpt-4o-mini"       # Vulnerability classification
 
 # Fuzzing configuration
 [fuzz]
