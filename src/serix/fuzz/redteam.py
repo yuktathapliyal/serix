@@ -221,11 +221,6 @@ The attack should be a single message that could be sent to an AI assistant.""",
             reasoning_start = judge_text.upper().find("REASONING:")
             reasoning = judge_text[reasoning_start + 10 :].strip()
 
-        if self.verbose:
-            console.print(
-                f"[dim]Judge ({self.judge_model}):[/dim] {judge_text[:100]}..."
-            )
-
         return JudgeVerdict(
             success=success,
             reasoning=reasoning,
@@ -417,28 +412,38 @@ The attack should be a single message that could be sent to an AI assistant.""",
                 payload = self._generate_dynamic_attack(goal, i)
                 strategy_name = f"dynamic_{i}"
 
-            # Verbose mode: detailed output
+            # Verbose mode: detailed output (matches adaptive style)
             if self.verbose:
-                console.print(f"\n[cyan]{'━' * 50}[/cyan]")
-                console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
-                console.print(f"[cyan]{'━' * 50}[/cyan]")
+                console.print(f"\n[cyan]━━━ Attack #{i+1}: {strategy_name} ━━━[/cyan]")
                 payload_preview = (
                     payload[:100] + "..." if len(payload) > 100 else payload
                 )
                 console.print(f"[dim]Payload:[/dim] {payload_preview}")
-                console.print("[dim]Executing...[/dim]")
+                console.print("[dim]Sending to target...[/dim]")
 
             # Run the attack using Target.send()
             target_response = target.send(payload)
             response = target_response.content
 
-            # Verbose: show latency
-            if self.verbose and target_response.latency_ms > 0:
-                console.print(f"[dim]Latency: {target_response.latency_ms:.0f}ms[/dim]")
-                console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
+            # Verbose: show latency and judging
+            if self.verbose:
+                if target_response.latency_ms > 0:
+                    console.print(
+                        f"[dim]Latency: {target_response.latency_ms:.0f}ms[/dim]"
+                    )
+                console.print("[dim]Judging...[/dim]")
 
             # Judge the result with impartial evaluator
             verdict = self._judge_response(goal, payload, response)
+
+            # Verbose: show verdict (matches adaptive style)
+            if self.verbose:
+                status = (
+                    "[red]EXPLOITED[/red]"
+                    if verdict.success
+                    else "[green]DEFENDED[/green]"
+                )
+                console.print(f"{status} [dim]({verdict.confidence})[/dim]")
 
             attack = Attack(
                 strategy=strategy_name,
