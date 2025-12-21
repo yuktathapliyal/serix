@@ -393,11 +393,9 @@ The attack should be a single message that could be sent to an AI assistant.""",
         goal: str,
         max_attempts: int = 10,
     ) -> AttackResults:
-        """
-        Run adversarial attacks against a Target instance.
+        """Run adversarial attacks against a Target instance.
 
-        This is the new preferred method that uses the Target abstraction.
-        Works with DecoratorTarget, HttpTarget, and ScriptTarget.
+        Uses unified [X/Y] progress format. Detailed output shown in verbose mode.
 
         Args:
             target: Target instance to attack
@@ -407,8 +405,6 @@ The attack should be a single message that could be sent to an AI assistant.""",
         Returns:
             AttackResults with all attempts and outcomes
         """
-        from serix.report.console import print_critical_vulnerability
-
         results = AttackResults(goal=goal, total_attempts=max_attempts)
 
         for i in range(max_attempts):
@@ -421,24 +417,27 @@ The attack should be a single message that could be sent to an AI assistant.""",
                 payload = self._generate_dynamic_attack(goal, i)
                 strategy_name = f"dynamic_{i}"
 
-            # Show attack header
-            console.print(f"\n[cyan]{'━' * 50}[/cyan]")
-            console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
-            console.print(f"[cyan]{'━' * 50}[/cyan]")
-            payload_preview = payload[:100] + "..." if len(payload) > 100 else payload
-            console.print(f"[dim]Payload:[/dim] {payload_preview}")
+            # Verbose mode: detailed output
+            if self.verbose:
+                console.print(f"\n[cyan]{'━' * 50}[/cyan]")
+                console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
+                console.print(f"[cyan]{'━' * 50}[/cyan]")
+                payload_preview = (
+                    payload[:100] + "..." if len(payload) > 100 else payload
+                )
+                console.print(f"[dim]Payload:[/dim] {payload_preview}")
+                console.print("[dim]Executing...[/dim]")
 
             # Run the attack using Target.send()
-            console.print("[dim]Executing...[/dim]")
             target_response = target.send(payload)
             response = target_response.content
 
-            # Show latency if available
-            if target_response.latency_ms > 0:
+            # Verbose: show latency
+            if self.verbose and target_response.latency_ms > 0:
                 console.print(f"[dim]Latency: {target_response.latency_ms:.0f}ms[/dim]")
+                console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
 
             # Judge the result with impartial evaluator
-            console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
             verdict = self._judge_response(goal, payload, response)
 
             attack = Attack(
@@ -450,15 +449,18 @@ The attack should be a single message that could be sent to an AI assistant.""",
             )
             results.attacks.append(attack)
 
+            # Output result in unified [X/Y] format
+            status_icon = "✓" if verdict.success else "✗"
+            status_text = "exploited" if verdict.success else "defended"
+            status_color = "red" if verdict.success else "green"
+
+            console.print(
+                f"[dim][{i+1}/{max_attempts}][/dim] {strategy_name}: "
+                f"[{status_color}]{status_icon} {status_text}[/{status_color}]"
+            )
+
             if verdict.success:
-                # Print dramatic vulnerability alert
-                print_critical_vulnerability(attack)
-                console.print(f"[dim]Confidence: {verdict.confidence.upper()}[/dim]")
-                break  # Stop on first success for maximum drama
-            else:
-                console.print(
-                    f"[green]DEFENDED[/green] [dim]({verdict.confidence})[/dim]"
-                )
+                break  # Stop on first success
 
         return results
 
@@ -474,6 +476,8 @@ The attack should be a single message that could be sent to an AI assistant.""",
         on_attack: Callable[[str], None] | None = None,
         on_response: Callable[[str, int], None] | None = None,
         on_critic: Callable[[str, str], None] | None = None,
+        # Callback for CLI progress (non-live mode)
+        on_progress: Callable[[int, int], None] | None = None,
     ) -> "AdversaryResult":
         """Run adaptive adversary attack using personas.
 
@@ -491,6 +495,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_attack: Callback when attack payload is generated
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
+            on_progress: Callback for CLI progress (turn, max_turns)
 
         Returns:
             AdversaryResult with attack outcome and conversation history
@@ -532,6 +537,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_attack=on_attack,
             on_response=on_response,
             on_critic=on_critic,
+            on_progress=on_progress,
         )
 
         # Run all personas for comprehensive reporting

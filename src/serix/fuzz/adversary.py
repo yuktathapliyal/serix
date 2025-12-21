@@ -25,6 +25,7 @@ OnTurnCallback = Callable[[int, str], None]  # (turn, technique)
 OnAttackCallback = Callable[[str], None]  # (payload)
 OnResponseCallback = Callable[[str, int], None]  # (response, latency_ms)
 OnCriticCallback = Callable[[str, str], None]  # (verdict, confidence)
+OnProgressCallback = Callable[[int, int], None]  # (turn, max_turns)
 
 console = Console()
 
@@ -178,6 +179,8 @@ class AdversaryLoop:
         on_attack: OnAttackCallback | None = None,
         on_response: OnResponseCallback | None = None,
         on_critic: OnCriticCallback | None = None,
+        # Callback for CLI progress (non-live mode)
+        on_progress: OnProgressCallback | None = None,
     ) -> None:
         """Initialize the adversary loop.
 
@@ -192,6 +195,7 @@ class AdversaryLoop:
             on_attack: Callback when attack payload is generated
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
+            on_progress: Callback for CLI progress (turn, max_turns)
         """
         models = get_models()
         self.client = attacker_client
@@ -205,6 +209,8 @@ class AdversaryLoop:
         self.on_attack = on_attack
         self.on_response = on_response
         self.on_critic = on_critic
+        # Callback for CLI progress
+        self.on_progress = on_progress
 
     def _call_critic(self, goal: str, payload: str, response: str) -> CriticFeedback:
         """Have the Critic analyze an attack attempt.
@@ -338,6 +344,7 @@ class AdversaryLoop:
         target: "Target",
         goal: str,
         persona: AttackPersona | None = None,
+        on_progress: OnProgressCallback | None = None,
     ) -> AdversaryResult:
         """Run multi-turn adaptive attack against target.
 
@@ -345,10 +352,13 @@ class AdversaryLoop:
             target: Target to attack
             goal: Attack goal description
             persona: Specific persona to use (default: cycle through all)
+            on_progress: Override progress callback (for closure injection)
 
         Returns:
             AdversaryResult with attack outcome
         """
+        # Use provided callback or fall back to instance callback
+        progress_callback = on_progress or self.on_progress
         # Select persona
         if persona:
             active_persona = persona
@@ -372,6 +382,10 @@ class AdversaryLoop:
             console.print(f"[dim]Max turns: {self.max_turns}[/dim]")
 
         for turn in range(1, self.max_turns + 1):
+            # CLI progress callback (non-live mode)
+            if progress_callback:
+                progress_callback(turn, self.max_turns)
+
             if self.verbose:
                 console.print(f"\n[cyan]━━━ Turn {turn}/{self.max_turns} ━━━[/cyan]")
 
@@ -498,11 +512,41 @@ class AdversaryLoop:
             List of AdversaryResults, one per persona
         """
         results = []
-        for persona in self.personas:
+        total_personas = len(self.personas)
+
+        for i, persona in enumerate(self.personas, 1):
             if self.verbose:
                 console.print(f"\n[bold]═══ Testing with {persona.name} ═══[/bold]")
-            result = self.attack(target, goal, persona)
+
+            # Create closure that captures persona context for progress output
+            def make_progress_callback(
+                idx: int, total: int, name: str
+            ) -> OnProgressCallback:
+                def callback(turn: int, max_turns: int) -> None:
+                    console.print(
+                        f"[dim][{idx}/{total}][/dim] [cyan]{name}[/cyan]: "
+                        f"Turn {turn}/{max_turns}..."
+                    )
+
+                return callback
+
+            # Only inject progress callback if not in verbose mode (avoid duplicate output)
+            progress_cb = None
+            if not self.verbose and self.on_progress is not None:
+                progress_cb = make_progress_callback(i, total_personas, persona.name)
+
+            result = self.attack(target, goal, persona, on_progress=progress_cb)
             results.append(result)
+
+            # Print persona result (non-verbose mode)
+            if not self.verbose and self.on_progress is not None:
+                status_icon = "✓" if result.success else "✗"
+                status_text = "exploited" if result.success else "defended"
+                status_color = "red" if result.success else "green"
+                console.print(
+                    f"[dim][{i}/{total_personas}][/dim] [cyan]{persona.name}[/cyan]: "
+                    f"[{status_color}]{status_icon} {status_text}[/{status_color}]"
+                )
 
             # Early exit only if requested
             if stop_on_success and result.success:
