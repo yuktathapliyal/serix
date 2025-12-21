@@ -357,7 +357,21 @@ def attack(
         raise typer.Exit(1)
 
     # Create red team engine with unpatched client
-    attacker_client = original_class()
+    try:
+        attacker_client = original_class()
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "api_key" in error_msg:
+            console.print("[red]Error:[/red] OpenAI API key not found\n")
+            console.print("Set your API key using one of these methods:\n")
+            console.print("  1. Environment variable:")
+            console.print("     [green]export OPENAI_API_KEY=sk-...[/green]\n")
+            console.print("  2. In your shell profile (~/.bashrc or ~/.zshrc)")
+            console.print("\nGet your key at: https://platform.openai.com/api-keys")
+        else:
+            console.print(f"[red]Error:[/red] Failed to initialize OpenAI client: {e}")
+        raise typer.Exit(1)
+
     engine = RedTeamEngine(
         client=attacker_client,
         judge_model=final_judge_model,
@@ -566,7 +580,21 @@ def test(
         raise typer.Exit(1)
 
     # Create red team engine
-    attacker_client = original_class()
+    try:
+        attacker_client = original_class()
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "api_key" in error_msg:
+            console.print("[red]Error:[/red] OpenAI API key not found\n")
+            console.print("Set your API key using one of these methods:\n")
+            console.print("  1. Environment variable:")
+            console.print("     [green]export OPENAI_API_KEY=sk-...[/green]\n")
+            console.print("  2. In your shell profile (~/.bashrc or ~/.zshrc)")
+            console.print("\nGet your key at: https://platform.openai.com/api-keys")
+        else:
+            console.print(f"[red]Error:[/red] Failed to initialize OpenAI client: {e}")
+        raise typer.Exit(1)
+
     engine = RedTeamEngine(
         client=attacker_client,
         judge_model=judge_model,
