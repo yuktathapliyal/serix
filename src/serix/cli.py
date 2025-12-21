@@ -574,6 +574,10 @@ def test(
             help="Mutation probability 0.0-1.0 (default: 0.5)",
         ),
     ] = 0.5,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompts (for CI/CD)"),
+    ] = False,
 ) -> None:
     """Test an agent with security scenarios.
 
@@ -818,11 +822,19 @@ def test(
                 "Previously mitigated attack is now exploitable!"
             )
             if not no_fail_fast:
-                raise typer.Exit(1)
+                should_prompt = _is_interactive() and not yes
+                if should_prompt:
+                    if not typer.confirm("Continue with new tests?", default=False):
+                        raise typer.Exit(1)
+                    console.print()
+                elif not yes:
+                    # Non-interactive without --yes: fail
+                    raise typer.Exit(1)
+                # With --yes: continue without prompting
 
         if regression_result.failed > 0:
             # Determine if we should prompt or fail
-            should_prompt = _is_interactive() and not no_fail_fast
+            should_prompt = _is_interactive() and not no_fail_fast and not yes
 
             print_regression_failure(
                 regression_result.failed_attacks,
@@ -836,9 +848,10 @@ def test(
                     if not typer.confirm("Continue with new tests?", default=True):
                         raise typer.Exit(1)
                     console.print()  # Visual spacing after prompt
-                else:
-                    # Non-interactive (CI): fail immediately
+                elif not yes:
+                    # Non-interactive without --yes: fail immediately
                     raise typer.Exit(1)
+                # With --yes: continue without prompting
 
     try:
         # Use adversary loop for adaptive mode
@@ -915,12 +928,17 @@ def test(
                 )
                 console.print(f"[dim]Max turns per persona: {depth}[/dim]")
 
+                # Enable progress output in non-live mode (callback signals progress mode)
+                def progress_signal(turn: int, max_turns: int) -> None:
+                    pass  # Actual printing handled in AdversaryLoop
+
                 adversary_result = engine.attack_with_adversary(
                     target=target_obj,
                     goal=final_goal,
                     scenarios=scenario_list,
                     max_turns=depth,
                     system_prompt=system_prompt,
+                    on_progress=progress_signal,
                 )
 
                 # Print fix suggestions if available
