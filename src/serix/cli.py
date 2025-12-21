@@ -731,6 +731,23 @@ def test(
     console.print(f"[yellow]Goal:[/yellow] {final_goal}")
     console.print(f"[dim]Mode:[/dim] {effective_mode}")
 
+    # Show model config in verbose mode (once at startup, not per-turn)
+    if final_verbose:
+        from serix.core.config_loader import get_models
+
+        models = get_models()
+        # Use CLI override for judge if provided, otherwise config/default
+        effective_judge = judge_model or models.judge
+        if effective_mode == "adaptive":
+            console.print(
+                f"[dim]Models: attacker={models.attacker}, "
+                f"critic={models.critic}, judge={effective_judge}[/dim]"
+            )
+        else:
+            console.print(
+                f"[dim]Models: attacker={models.attacker}, judge={effective_judge}[/dim]"
+            )
+
     # Get the original OpenAI class (unpatched) for the attacker
     original_class = get_original_openai_class()
     if original_class is None:
