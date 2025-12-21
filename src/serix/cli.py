@@ -480,16 +480,12 @@ def test(
             help="Scenarios to test (implies --mode adaptive)",
         ),
     ] = None,
-    max_attempts: Annotated[
+    depth: Annotated[
         int,
         typer.Option(
-            "--max-attempts", "-n", help="Maximum attack attempts (static mode)"
-        ),
-    ] = 5,
-    max_turns: Annotated[
-        int,
-        typer.Option(
-            "--max-turns", "-t", help="Maximum turns per persona (adaptive mode)"
+            "--depth",
+            "-d",
+            help="Attack depth: turns per persona (adaptive) or templates (static)",
         ),
     ] = 3,
     report: Annotated[
@@ -547,6 +543,13 @@ def test(
             "--no-fail-fast", help="Continue running even if regression check fails"
         ),
     ] = False,
+    skip_mitigated: Annotated[
+        bool,
+        typer.Option(
+            "--skip-mitigated",
+            help="Skip attacks that have been mitigated (faster runs)",
+        ),
+    ] = False,
 ) -> None:
     """Test an agent with security scenarios.
 
@@ -591,9 +594,6 @@ def test(
     config_target = file_config.target.target or file_config.target.script
     final_target = target or config_target
     final_goal = goal or file_config.attack.goal
-    final_max_attempts = (
-        max_attempts if max_attempts != 5 else file_config.attack.max_attempts
-    )
     final_report = report or (
         Path(file_config.attack.report) if file_config.attack.report else None
     )
@@ -750,10 +750,20 @@ def test(
             target=target_obj,
             goal=final_goal,
             fail_fast=not no_fail_fast,
+            skip_mitigated=skip_mitigated,
         )
         print_immune_check_result(
             regression_result.passed, regression_result.total_checked
         )
+
+        # Handle regression: defended → exploited (critical)
+        if regression_result.has_regression:
+            console.print(
+                "[red bold]⚠️  REGRESSION DETECTED:[/red bold] "
+                "Previously mitigated attack is now exploitable!"
+            )
+            if not no_fail_fast:
+                raise typer.Exit(1)
 
         if regression_result.failed > 0:
             # Determine if we should prompt or fail
@@ -789,7 +799,7 @@ def test(
                     final_target.split(":")[-1] if ":" in final_target else final_target
                 )
 
-                with LiveAttackUI(target_name, scenario_name, max_turns) as ui:
+                with LiveAttackUI(target_name, scenario_name, depth) as ui:
                     ui.update_status("ATTACKING")
 
                     # Run attack with UI callbacks
@@ -797,7 +807,7 @@ def test(
                         target=target_obj,
                         goal=final_goal,
                         scenarios=scenario_list,
-                        max_turns=max_turns,
+                        max_turns=depth,
                         system_prompt=system_prompt,
                         on_turn=ui.update_turn,
                         on_attack=ui.update_attacker_message,
@@ -848,13 +858,13 @@ def test(
                 console.print(
                     f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
                 )
-                console.print(f"[dim]Max turns per persona: {max_turns}[/dim]")
+                console.print(f"[dim]Max turns per persona: {depth}[/dim]")
 
                 adversary_result = engine.attack_with_adversary(
                     target=target_obj,
                     goal=final_goal,
                     scenarios=scenario_list,
-                    max_turns=max_turns,
+                    max_turns=depth,
                     system_prompt=system_prompt,
                 )
 
@@ -1003,11 +1013,11 @@ def test(
                 raise typer.Exit(code=1)
             return
 
-        # Use static mode (single-turn template attacks)
+        # Use static mode - runs all 8 predefined attack templates
         results = engine.attack_target(
             target=target_obj,
             goal=final_goal,
-            max_attempts=final_max_attempts,
+            max_attempts=8,  # All static templates
         )
     finally:
         target_obj.teardown()
@@ -1021,7 +1031,7 @@ def test(
             console.print(f"  • {atk.strategy}: {atk.payload[:80]}...")
     else:
         console.print(
-            f"\n[green]✓[/green] Agent defended against {final_max_attempts} attacks"
+            f"\n[green]✓[/green] Agent defended against {results.total_attempts} attacks"
         )
 
     # Save attacks for regression testing
