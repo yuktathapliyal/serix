@@ -438,9 +438,7 @@ class AdversaryLoop:
 
             # Have critic analyze
             if self.verbose:
-                console.print(
-                    f"[dim]Analyzing with Critic ({self.critic_model})...[/dim]"
-                )
+                console.print("[dim]Analyzing...[/dim]")
 
             feedback = self._call_critic(goal, payload.content, response.content)
 
@@ -473,7 +471,7 @@ class AdversaryLoop:
 
         # Final judge verdict
         if self.verbose:
-            console.print(f"\n[cyan]Final judgment ({self.judge_model})...[/cyan]")
+            console.print("\n[cyan]Final judgment...[/cyan]")
 
         success, confidence, vuln_type, reasoning = self._call_judge(goal, conversation)
 
