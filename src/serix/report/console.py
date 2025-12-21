@@ -552,7 +552,12 @@ def print_regression_failure(
 
     console.print()
     if fail_fast:
-        console.print("[dim]Fix these regressions before running new attacks.[/dim]")
+        console.print(
+            "[dim]Tip: This agent is still vulnerable to a previous attack.[/dim]"
+        )
+        console.print(
+            "[dim]     Run with --force to continue with new tests anyway.[/dim]"
+        )
 
 
 def print_attacks_saved(count: int) -> None:

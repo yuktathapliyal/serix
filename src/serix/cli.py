@@ -992,6 +992,10 @@ def demo(
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Continue even if regression check fails"),
+    ] = False,
 ) -> None:
     """Run a quick demo attack against a bundled vulnerable agent.
 
@@ -1038,6 +1042,8 @@ def demo(
         cmd.append("--live")
     if verbose:
         cmd.append("--verbose")
+    if force:
+        cmd.append("--no-fail-fast")
 
     # Run as subprocess
     result = subprocess.run(cmd)
