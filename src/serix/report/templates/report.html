@@ -1120,58 +1120,6 @@
         {# EVALUATION REPORT                                             #}
         {# ============================================================ #}
 
-        {% if report.healing %}
-        <!-- Fix Suggestions -->
-        <div class="section healing-section">
-            <div class="healing-card">
-                <div class="healing-header">
-                    <div class="healing-title">
-                        <span class="healing-icon">&#x1F3E5;</span>
-                        <h3>Self-Healing Proposal</h3>
-                    </div>
-                    <div class="healing-meta">
-                        <span class="confidence-badge">{{ report.healing.confidence }}% confidence</span>
-                        <span class="owasp-badge critical">{{ report.healing.owasp_code }}</span>
-                    </div>
-                </div>
-                <div class="healing-body">
-                    <p class="healing-reasoning">{{ report.healing.reasoning }}</p>
-
-                    {% if report.healing.has_text_fix %}
-                    <!-- Text Fix (Diff) -->
-                    <details class="healing-diff-section" open>
-                        <summary class="diff-toggle">
-                            <span>&#x1F4DD; Text Fix (Patched System Prompt)</span>
-                        </summary>
-                        <p class="diff-explanation">{{ report.healing.text_fix_explanation }}</p>
-                        <div class="code-block diff-block">
-                            <button class="copy-btn" onclick="copyPatchedPrompt()">Copy Patched Prompt</button>
-                            <pre class="diff-content">{{ report.healing.text_fix_diff }}</pre>
-                        </div>
-                        <textarea id="patched-prompt-text" style="display:none;">{{ report.healing.patched_prompt }}</textarea>
-                    </details>
-                    {% endif %}
-
-                    {% if report.healing.tool_fixes %}
-                    <!-- Tool Fixes -->
-                    <div class="tool-fixes-section">
-                        <h4>&#x1F527; Tool Fixes (Policy Recommendations)</h4>
-                        <ul class="tool-fix-list">
-                            {% for fix in report.healing.tool_fixes %}
-                            <li class="tool-fix-item severity-{{ fix.severity }}">
-                                <span class="fix-severity-badge {{ fix.severity }}">{{ fix.severity | upper }}</span>
-                                <span class="fix-recommendation">{{ fix.recommendation }}</span>
-                                <span class="fix-owasp">({{ fix.owasp_code }})</span>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
         <!-- Status Banner -->
         <div class="status-banner {{ 'failed' if not report.passed else 'passed' }}">
             <div class="status-icon">
@@ -1325,6 +1273,58 @@
                     <div class="payload-preview">{{ attempt.reason | truncate(100) }}</div>
                 </div>
                 {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if report.healing %}
+        <!-- Self-Healing Proposal -->
+        <div class="section healing-section">
+            <div class="healing-card">
+                <div class="healing-header">
+                    <div class="healing-title">
+                        <span class="healing-icon">&#x1F3E5;</span>
+                        <h3>Self-Healing Proposal</h3>
+                    </div>
+                    <div class="healing-meta">
+                        <span class="confidence-badge">{{ report.healing.confidence }}% confidence</span>
+                        <span class="owasp-badge critical">{{ report.healing.owasp_code }}</span>
+                    </div>
+                </div>
+                <div class="healing-body">
+                    <p class="healing-reasoning">{{ report.healing.reasoning }}</p>
+
+                    {% if report.healing.has_text_fix %}
+                    <!-- Text Fix (Diff) -->
+                    <details class="healing-diff-section" open>
+                        <summary class="diff-toggle">
+                            <span>&#x1F4DD; Text Fix (Patched System Prompt)</span>
+                        </summary>
+                        <p class="diff-explanation">{{ report.healing.text_fix_explanation }}</p>
+                        <div class="code-block diff-block">
+                            <button class="copy-btn" onclick="copyPatchedPrompt()">Copy Patched Prompt</button>
+                            <pre class="diff-content">{{ report.healing.text_fix_diff }}</pre>
+                        </div>
+                        <textarea id="patched-prompt-text" style="display:none;">{{ report.healing.patched_prompt }}</textarea>
+                    </details>
+                    {% endif %}
+
+                    {% if report.healing.tool_fixes %}
+                    <!-- Tool Fixes -->
+                    <div class="tool-fixes-section">
+                        <h4>&#x1F527; Tool Fixes (Policy Recommendations)</h4>
+                        <ul class="tool-fix-list">
+                            {% for fix in report.healing.tool_fixes %}
+                            <li class="tool-fix-item severity-{{ fix.severity }}">
+                                <span class="fix-severity-badge {{ fix.severity }}">{{ fix.severity | upper }}</span>
+                                <span class="fix-recommendation">{{ fix.recommendation }}</span>
+                                <span class="fix-owasp">({{ fix.owasp_code }})</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
         {% endif %}
