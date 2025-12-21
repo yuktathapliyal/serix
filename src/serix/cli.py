@@ -301,6 +301,13 @@ def attack(
         Path | None,
         typer.Option("--config", "-c", help="Path to config file"),
     ] = None,
+    no_save: Annotated[
+        bool, typer.Option("--no-save", help="Disable auto-save of successful attacks")
+    ] = False,
+    save_all: Annotated[
+        bool,
+        typer.Option("--save-all", help="Save all attacks including failed ones"),
+    ] = False,
 ) -> None:
     """Run red team attacks against an agent.
 
@@ -310,6 +317,8 @@ def attack(
     from serix.core.client import get_original_openai_class
     from serix.core.config_loader import find_config_file, load_config
     from serix.fuzz.redteam import RedTeamEngine
+    from serix.regression.store import AttackStore, StoredAttack
+    from serix.report.console import print_attacks_saved
     from serix.report.html import generate_html_report
 
     # Load config file
@@ -404,6 +413,28 @@ def attack(
         console.print(
             f"\n[green]✓[/green] Agent defended against {final_max_attempts} attacks"
         )
+
+    # Save attacks for regression testing
+    if not no_save:
+        store = AttackStore()
+        saved_count = 0
+
+        # Determine which attacks to save
+        attacks_to_save = results.attacks if save_all else results.successful_attacks
+
+        for atk in attacks_to_save:
+            attack_to_store = StoredAttack.create(
+                goal=final_goal,
+                payload=atk.payload,
+                vulnerability_type=atk.strategy,
+                agent_response=atk.response or "",
+                owasp_code="LLM01",
+            )
+            if store.save(attack_to_store):
+                saved_count += 1
+
+        if saved_count > 0:
+            print_attacks_saved(saved_count)
 
     # Generate HTML report if requested
     if final_report:
