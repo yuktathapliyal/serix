@@ -4,7 +4,8 @@
 
 # Target configuration
 [target]
-script = "agent.py"            # Your agent script to test
+target = "examples/golden_victim.py:golden_victim"  # file.py:function or http://url
+# script = "agent.py"          # Legacy: just the script file (deprecated)
 # working_dir = "."            # Working directory for script execution
 
 # Red team attack configuration

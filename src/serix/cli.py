@@ -272,7 +272,7 @@ def replay(
     console.print("[green]✓[/green] Replay complete")
 
 
-@app.command()
+@app.command(hidden=True)  # Deprecated: hidden from --help
 def attack(
     script: Annotated[
         Path | None,
@@ -309,11 +309,16 @@ def attack(
         typer.Option("--save-all", help="Save all attacks including failed ones"),
     ] = False,
 ) -> None:
-    """Run red team attacks against an agent.
+    """[DEPRECATED] Use 'serix test --mode static' instead.
 
+    Run red team attacks against an agent.
     Configuration can be provided via serix.toml file or CLI arguments.
     CLI arguments override config file values.
     """
+    console.print(
+        "[yellow]Warning: 'serix attack' is deprecated. "
+        "Please use 'serix test --mode static' instead.[/yellow]\n"
+    )
     from serix.core.client import get_original_openai_class
     from serix.core.config_loader import find_config_file, load_config
     from serix.fuzz.redteam import RedTeamEngine
@@ -450,27 +455,41 @@ def attack(
 @app.command()
 def test(
     target: Annotated[
-        str,
+        str | None,
         typer.Argument(
             help="Target to test: file.py:function_name, file.py:ClassName, or http://url"
         ),
-    ],
+    ] = None,
+    mode: Annotated[
+        str | None,
+        typer.Option(
+            "--mode",
+            "-m",
+            help="Attack mode: 'static' (fast, single-turn) or 'adaptive' (smart, multi-turn)",
+        ),
+    ] = None,
     goal: Annotated[
         str | None,
         typer.Option("--goal", "-g", help="Attack goal description"),
     ] = None,
     scenarios: Annotated[
         str | None,
-        typer.Option("--scenarios", "-s", help="Comma-separated scenarios to test"),
+        typer.Option(
+            "--scenarios",
+            "-s",
+            help="Scenarios to test (implies --mode adaptive)",
+        ),
     ] = None,
     max_attempts: Annotated[
         int,
-        typer.Option("--max-attempts", "-n", help="Maximum attack attempts"),
+        typer.Option(
+            "--max-attempts", "-n", help="Maximum attack attempts (static mode)"
+        ),
     ] = 5,
     max_turns: Annotated[
         int,
         typer.Option(
-            "--max-turns", "-t", help="Maximum turns per persona (for --scenarios mode)"
+            "--max-turns", "-t", help="Maximum turns per persona (adaptive mode)"
         ),
     ] = 3,
     report: Annotated[
@@ -511,8 +530,16 @@ def test(
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to serix.toml config file"),
+    ] = None,
     no_save: Annotated[
         bool, typer.Option("--no-save", help="Disable auto-save of successful attacks")
+    ] = False,
+    save_all: Annotated[
+        bool,
+        typer.Option("--save-all", help="Save all attacks including failed ones"),
     ] = False,
     no_fail_fast: Annotated[
         bool,
@@ -528,50 +555,102 @@ def test(
     - Agent class: path/to/file.py:ClassName
     - HTTP endpoint: http://localhost:8000/chat
 
+    Modes:
+    - adaptive (default): Smart multi-turn attacks with AI personas
+    - static: Fast single-turn attacks with predefined templates
+
     Examples:
-        serix test examples/agent.py:my_agent -g "reveal secrets"
-        serix test http://localhost:8000/chat -g "bypass safety" --input-field message
-        serix test agent.py:MyAgent --scenarios injection,pii_leak
+        serix test agent.py:my_agent --goal "reveal secrets"
+        serix test agent.py:my_agent --mode static --goal "quick check"
+        serix test http://localhost:8000/chat --mode static --input-field message
+        serix test --config serix.toml
     """
     import json
 
     from serix.core.client import get_original_openai_class
+    from serix.core.config_loader import find_config_file, load_config
     from serix.core.target import DecoratorTarget, HttpTarget, Target
     from serix.eval import Evaluator, RemediationEngine
     from serix.fuzz.redteam import RedTeamEngine
+    from serix.regression.store import AttackStore, StoredAttack
+    from serix.report.console import print_attacks_saved
     from serix.report.github import write_github_output
     from serix.report.html import generate_evaluation_report, generate_html_report
     from serix.report.json_export import export_json
     from serix.sdk.decorator import Agent, get_system_prompt, load_function_from_path
 
+    # Load config file if provided or found
+    config_path = config or find_config_file()
+    file_config = load_config(config_path)
+
+    if config_path and config:  # Only show if explicitly provided
+        console.print(f"[dim]Using config:[/dim] {config_path}")
+
+    # Merge config with CLI args (CLI takes precedence)
+    # Prefer target field, fall back to script for backward compat
+    config_target = file_config.target.target or file_config.target.script
+    final_target = target or config_target
+    final_goal = goal or file_config.attack.goal
+    final_max_attempts = (
+        max_attempts if max_attempts != 5 else file_config.attack.max_attempts
+    )
+    final_report = report or (
+        Path(file_config.attack.report) if file_config.attack.report else None
+    )
+    final_verbose = verbose or file_config.verbose
+
+    # Validate target
+    if final_target is None:
+        console.print(
+            "[red]Error:[/red] Target is required. "
+            "Provide as argument or in config file."
+        )
+        raise typer.Exit(1)
+
+    # Determine effective mode
+    if mode == "static":
+        effective_mode = "static"
+    elif mode == "adaptive" or scenarios:
+        effective_mode = "adaptive"
+    else:
+        # Default: adaptive with all personas
+        effective_mode = "adaptive"
+        scenarios = "all"
+
+    # Build scenario list for adaptive mode
+    if effective_mode == "adaptive" and scenarios:
+        scenario_list = [s.strip() for s in scenarios.split(",")]
+    else:
+        scenario_list = None
+
     # Determine target type and create appropriate Target
     target_obj: Target
     system_prompt: str | None = None
 
-    if target.startswith("http://") or target.startswith("https://"):
+    if final_target.startswith("http://") or final_target.startswith("https://"):
         # HTTP endpoint target
         console.print(
-            f"[bold violet]Serix[/bold violet] Testing HTTP endpoint: {target}"
+            f"[bold violet]Serix[/bold violet] Testing HTTP endpoint: {final_target}"
         )
         parsed_headers = json.loads(headers) if headers else {}
         target_obj = HttpTarget(
-            url=target,
+            url=final_target,
             input_field=input_field,
             output_field=output_field,
             headers=parsed_headers,
-            verbose=verbose,
+            verbose=final_verbose,
         )
         # HTTP targets don't have system_prompt access
-    elif ":" in target:
+    elif ":" in final_target:
         # Python function or class target
-        file_path, name = target.rsplit(":", 1)
+        file_path, name = final_target.rsplit(":", 1)
         console.print(
             f"[bold violet]Serix[/bold violet] Testing {name} from {file_path}"
         )
 
         try:
             # Try loading as function first
-            func = load_function_from_path(target)
+            func = load_function_from_path(final_target)
 
             system_prompt = get_system_prompt(func)
 
@@ -580,7 +659,7 @@ def test(
                 agent_instance = func()
                 target_obj = DecoratorTarget(
                     func=agent_instance.respond,
-                    verbose=verbose,
+                    verbose=final_verbose,
                 )
                 # Try to get system_prompt from agent class
                 if not system_prompt:
@@ -591,7 +670,7 @@ def test(
 
                 target_obj = DecoratorTarget(
                     func=cast(Callable[[str], str], func),
-                    verbose=verbose,
+                    verbose=final_verbose,
                 )
         except Exception as e:
             console.print(f"[red]Error loading target:[/red] {e}")
@@ -605,15 +684,12 @@ def test(
         )
         raise typer.Exit(1)
 
-    # Default goal if not provided
-    final_goal = (
-        goal
-        or "Make the agent reveal sensitive information or bypass its safety guidelines"
-    )
+    # Default goal if not provided (if not from config or CLI)
+    if not final_goal:
+        final_goal = "Make the agent reveal sensitive information or bypass its safety guidelines"
 
     console.print(f"[yellow]Goal:[/yellow] {final_goal}")
-    if scenarios:
-        console.print(f"[dim]Scenarios:[/dim] {scenarios}")
+    console.print(f"[dim]Mode:[/dim] {effective_mode}")
 
     # Get the original OpenAI class (unpatched) for the attacker
     original_class = get_original_openai_class()
@@ -640,7 +716,7 @@ def test(
     engine = RedTeamEngine(
         client=attacker_client,
         judge_model=judge_model,
-        verbose=verbose,
+        verbose=final_verbose,
     )
 
     # Setup target and run attacks
@@ -657,9 +733,7 @@ def test(
 
     # Import regression modules
     from serix.regression.runner import RegressionRunner
-    from serix.regression.store import AttackStore, StoredAttack
     from serix.report.console import (
-        print_attacks_saved,
         print_immune_check_result,
         print_immune_check_start,
         print_regression_failure,
@@ -702,10 +776,8 @@ def test(
                     raise typer.Exit(1)
 
     try:
-        # Use adversary loop when scenarios are specified
-        if scenarios:
-            scenario_list = [s.strip() for s in scenarios.split(",")]
-
+        # Use adversary loop for adaptive mode
+        if effective_mode == "adaptive":
             if live:
                 # Live split-screen command center UI
                 import time
@@ -713,7 +785,9 @@ def test(
                 from serix.report.live_ui import LiveAttackUI
 
                 scenario_name = scenario_list[0] if scenario_list else "attack"
-                target_name = target.split(":")[-1] if ":" in target else target
+                target_name = (
+                    final_target.split(":")[-1] if ":" in final_target else final_target
+                )
 
                 with LiveAttackUI(target_name, scenario_name, max_turns) as ui:
                     ui.update_status("ATTACKING")
@@ -737,7 +811,7 @@ def test(
                     # Run evaluation
                     evaluator = Evaluator(
                         client=attacker_client,
-                        verbose=verbose,
+                        verbose=final_verbose,
                     )
                     evaluation = evaluator.evaluate(adversary_result)
 
@@ -793,7 +867,7 @@ def test(
                 # Run evaluation on adversary result (only for non-live mode)
                 evaluator = Evaluator(
                     client=attacker_client,
-                    verbose=verbose,
+                    verbose=final_verbose,
                 )
                 evaluation = evaluator.evaluate(adversary_result)
 
@@ -894,12 +968,12 @@ def test(
                     console.print(f"     {first_line}")
 
             # Generate HTML report if requested
-            if report:
+            if final_report:
                 report_path = generate_evaluation_report(
                     evaluation=evaluation,
                     adversary_result=adversary_result,
-                    target=target,
-                    output_path=report,
+                    target=final_target,
+                    output_path=final_report,
                     remediations=report_remediations,
                 )
                 console.print(f"\n[cyan]HTML Report:[/cyan] {report_path}")
@@ -909,7 +983,7 @@ def test(
                 json_path = export_json(
                     evaluation=evaluation,
                     adversary_result=adversary_result,
-                    target=target,
+                    target=final_target,
                     output_path=json_report,
                     remediations=report_remediations,
                 )
@@ -917,7 +991,7 @@ def test(
 
             # Write GitHub outputs if requested
             if github:
-                if write_github_output(evaluation, target):
+                if write_github_output(evaluation, final_target):
                     console.print("[dim]GitHub outputs written[/dim]")
                 else:
                     console.print(
@@ -929,49 +1003,52 @@ def test(
                 raise typer.Exit(code=1)
             return
 
-        # Use original attack_target for non-scenario mode
+        # Use static mode (single-turn template attacks)
         results = engine.attack_target(
             target=target_obj,
             goal=final_goal,
-            max_attempts=max_attempts,
+            max_attempts=final_max_attempts,
         )
     finally:
         target_obj.teardown()
 
-    # Report results (for non-adversary mode)
+    # Report results (for static mode)
     if results.successful_attacks:
         console.print(
             f"\n[red]⚠️  {len(results.successful_attacks)} vulnerabilities found![/red]"
         )
         for atk in results.successful_attacks:
             console.print(f"  • {atk.strategy}: {atk.payload[:80]}...")
-
-        # Auto-save successful attacks for regression testing
-        if not no_save:
-            saved_count = 0
-            for atk in results.successful_attacks:
-                attack_to_save = StoredAttack.create(
-                    goal=final_goal,
-                    payload=atk.payload,
-                    vulnerability_type=atk.strategy,
-                    agent_response=atk.response or "",
-                    owasp_code="LLM01",
-                )
-                if store.save(attack_to_save):
-                    saved_count += 1
-            if saved_count > 0:
-                print_attacks_saved(saved_count)
     else:
         console.print(
-            f"\n[green]✓[/green] Agent defended against {max_attempts} attacks"
+            f"\n[green]✓[/green] Agent defended against {final_max_attempts} attacks"
         )
 
+    # Save attacks for regression testing
+    if not no_save:
+        saved_count = 0
+        # Determine which attacks to save
+        attacks_to_save = results.attacks if save_all else results.successful_attacks
+
+        for atk in attacks_to_save:
+            attack_to_save = StoredAttack.create(
+                goal=final_goal,
+                payload=atk.payload,
+                vulnerability_type=atk.strategy,
+                agent_response=atk.response or "",
+                owasp_code="LLM01",
+            )
+            if store.save(attack_to_save):
+                saved_count += 1
+        if saved_count > 0:
+            print_attacks_saved(saved_count)
+
     # Generate HTML report if requested
-    if report:
+    if final_report:
         report_path = generate_html_report(
             results=results,
-            script_path=target,
-            output_path=report,
+            script_path=final_target,
+            output_path=final_report,
             judge_model=judge_model,
         )
         console.print(f"\n[cyan]Report:[/cyan] {report_path}")
