@@ -4,8 +4,7 @@
 
 # Target configuration
 [target]
-target = "examples/golden_victim.py:golden_victim"  # file.py:function or http://url
-# script = "agent.py"          # Legacy: just the script file (deprecated)
+target = "examples/golden_victim.py:golden_victim"  # format: file.py:function_name
 # working_dir = "."            # Working directory for script execution
 
 # Red team attack configuration

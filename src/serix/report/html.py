@@ -238,6 +238,18 @@ class VulnerabilityReportData:
 
 
 @dataclass
+class GoalResult:
+    """Result of testing a single goal (for multi-goal reports)."""
+
+    goal: str
+    passed: bool
+    personas_tried: list[str] = field(default_factory=list)
+    successful_persona: str | None = None
+    turns_taken: int = 0
+    vulnerabilities: list[VulnerabilityReportData] = field(default_factory=list)
+
+
+@dataclass
 class RemediationReportData:
     """Data for a single remediation in the report."""
 
@@ -268,7 +280,7 @@ class EvaluationReportData:
     # Metadata
     generated_at: str
     target: str
-    goal: str
+    goal: str  # Primary goal (first or failed goal)
 
     # Status
     passed: bool
@@ -299,6 +311,10 @@ class EvaluationReportData:
 
     # Campaign summary: all persona attempts
     attempts_log: list[dict] = field(default_factory=list)
+
+    # Multi-goal support
+    goals: list[str] = field(default_factory=list)
+    goal_results: list[GoalResult] = field(default_factory=list)
 
     # Report type indicator (for template)
     is_evaluation_report: bool = True
@@ -417,6 +433,7 @@ def create_evaluation_report_data(
     adversary_result: "AdversaryResult",
     target: str,
     remediations: list["Remediation"] | None = None,
+    goal_results: list[GoalResult] | None = None,
 ) -> EvaluationReportData:
     """Convert EvaluationResult to EvaluationReportData.
 
@@ -425,6 +442,7 @@ def create_evaluation_report_data(
         adversary_result: AdversaryResult from the attack
         target: Target identifier string
         remediations: Optional list of Remediation objects
+        goal_results: Optional list of GoalResult for multi-goal reports
 
     Returns:
         EvaluationReportData for template rendering
@@ -488,6 +506,9 @@ def create_evaluation_report_data(
         getattr(adversary_result, "healing", None)
     )
 
+    # Extract goals list from goal_results if available
+    goals_list = [gr.goal for gr in goal_results] if goal_results else []
+
     return EvaluationReportData(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         target=target,
@@ -507,6 +528,8 @@ def create_evaluation_report_data(
         confidence=adversary_result.confidence,
         healing=healing_data,
         attempts_log=getattr(adversary_result, "attempts_log", []),
+        goals=goals_list,
+        goal_results=goal_results or [],
     )
 
 
@@ -516,6 +539,7 @@ def generate_evaluation_report(
     target: str,
     output_path: Path,
     remediations: list["Remediation"] | None = None,
+    goal_results: list[GoalResult] | None = None,
 ) -> Path:
     """Generate an HTML report from evaluation results.
 
@@ -525,6 +549,7 @@ def generate_evaluation_report(
         target: Target identifier string
         output_path: Where to save the HTML file
         remediations: Optional list of Remediation objects
+        goal_results: Optional list of GoalResult for multi-goal reports
 
     Returns:
         Path to the generated report
@@ -543,7 +568,7 @@ def generate_evaluation_report(
 
     # Create report data
     report_data = create_evaluation_report_data(
-        evaluation, adversary_result, target, remediations
+        evaluation, adversary_result, target, remediations, goal_results
     )
 
     # Render template

@@ -181,6 +181,8 @@ class AdversaryLoop:
         on_critic: OnCriticCallback | None = None,
         # Callback for CLI progress (non-live mode)
         on_progress: OnProgressCallback | None = None,
+        # Fail-fast behavior
+        fail_fast: bool = False,
     ) -> None:
         """Initialize the adversary loop.
 
@@ -196,6 +198,7 @@ class AdversaryLoop:
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
             on_progress: Callback for CLI progress (turn, max_turns)
+            fail_fast: If True, stop within persona after first success
         """
         models = get_models()
         self.client = attacker_client
@@ -211,6 +214,8 @@ class AdversaryLoop:
         self.on_critic = on_critic
         # Callback for CLI progress
         self.on_progress = on_progress
+        # Fail-fast behavior
+        self.fail_fast = fail_fast
 
     def _call_critic(self, goal: str, payload: str, response: str) -> CriticFeedback:
         """Have the Critic analyze an attack attempt.
@@ -464,7 +469,8 @@ class AdversaryLoop:
             # Check if exploited with high confidence
             if feedback.likely_exploited and feedback.confidence == "high":
                 winning_payload = payload.content
-                break
+                if self.fail_fast:
+                    break  # Only exit early if fail_fast is True
 
             # Prepare feedback for next turn
             critic_feedback = f"Failure reason: {feedback.failure_reason}. Suggestion: {feedback.suggested_pivot}"
@@ -474,6 +480,11 @@ class AdversaryLoop:
             console.print("\n[cyan]Final judgment...[/cyan]")
 
         success, confidence, vuln_type, reasoning = self._call_judge(goal, conversation)
+
+        if self.verbose:
+            verdict = "EXPLOITED" if success else "DEFENDED"
+            color = "red" if success else "green"
+            console.print(f"[{color}]{verdict}[/] ({confidence})")
 
         if success and not winning_payload:
             # Judge found success that critic missed

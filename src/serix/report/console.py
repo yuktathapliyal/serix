@@ -490,24 +490,37 @@ def print_healing_summary(healing: "HealingResult") -> None:
 # Regression testing output functions
 
 
-def print_immune_check_start(count: int) -> None:
+def print_immune_check_start(
+    count: int, total_stored: int | None = None, skipped: int | None = None
+) -> None:
     """Print the start of the Immune Check phase.
 
     Args:
-        count: Number of stored attacks to replay
+        count: Number of attacks to replay (after filtering)
+        total_stored: Total stored attacks (before filtering)
+        skipped: Number of mitigated attacks skipped
     """
     console.print()
-    console.print(
-        f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} stored attack(s)..."
-    )
+    if skipped and total_stored and skipped > 0:
+        console.print(
+            f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} of {total_stored} "
+            f"stored attacks ({skipped} mitigated, skipped)..."
+        )
+    else:
+        console.print(
+            f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} stored attack(s)..."
+        )
 
 
-def print_immune_check_result(passed: int, total: int) -> None:
+def print_immune_check_result(
+    passed: int, total: int, planned: int | None = None
+) -> None:
     """Print the result of the Immune Check.
 
     Args:
         passed: Number of attacks defended
-        total: Total attacks checked
+        total: Total attacks actually checked
+        planned: Total attacks planned to check (for early stop detection)
     """
     if passed == total:
         console.print(
@@ -516,7 +529,14 @@ def print_immune_check_result(passed: int, total: int) -> None:
         )
     else:
         failed = total - passed
-        console.print(f"[red]✗ {failed}/{total} still vulnerable[/red]")
+        # Show if we stopped early due to fail_fast
+        if planned and total < planned:
+            console.print(
+                f"[red]✗ {failed}/{total} still vulnerable[/red] "
+                f"[dim](stopped early, {planned - total} not checked)[/dim]"
+            )
+        else:
+            console.print(f"[red]✗ {failed}/{total} still vulnerable[/red]")
 
 
 def print_regression_failure(
