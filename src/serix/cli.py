@@ -5,7 +5,12 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    from serix.eval import EvaluationResult
+    from serix.fuzz.adversary import AdversaryResult
+    from serix.fuzz.redteam import AttackResults
 
 import openai
 import typer
