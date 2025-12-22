@@ -339,9 +339,34 @@ def load_function_from_path(path: str) -> Callable[..., Any]:
 
     # Get function
     if not hasattr(module, func_name):
+        # Filter to only show likely targets (callables defined in the module)
+        available = []
+        for name in dir(module):
+            if name.startswith("_"):
+                continue
+            obj = getattr(module, name, None)
+            if obj is None:
+                continue
+            # Only show callables (functions, classes)
+            if not callable(obj):
+                continue
+            # Skip common imports
+            if name in ("OpenAI", "json", "os", "sys", "Path", "Console"):
+                continue
+            # Check if it's defined in this module (not imported)
+            obj_module = getattr(obj, "__module__", None)
+            if obj_module and obj_module == module.__name__:
+                available.append(name)
+            elif hasattr(obj, "__bases__"):  # It's a class
+                available.append(name)
+            elif callable(obj) and not isinstance(obj, type):  # Regular function
+                # Include functions without __module__ (e.g., wrapped)
+                if obj_module is None:
+                    available.append(name)
+
         raise ImportError(
             f"Function '{func_name}' not found in {file_path}. "
-            f"Available: {[n for n in dir(module) if not n.startswith('_')]}"
+            f"Available: {available if available else '(no valid targets found)'}"
         )
 
     func = getattr(module, func_name)
