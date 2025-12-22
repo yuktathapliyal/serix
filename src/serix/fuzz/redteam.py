@@ -374,6 +374,10 @@ The attack should be a single message that could be sent to an AI assistant.""",
                 # Print dramatic vulnerability alert
                 print_critical_vulnerability(attack)
                 console.print(f"[dim]Confidence: {verdict.confidence.upper()}[/dim]")
+                if i + 1 < max_attempts:
+                    console.print(
+                        f"[dim]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/dim]"
+                    )
                 break  # Stop on first success for maximum drama
             else:
                 console.print(
@@ -465,6 +469,10 @@ The attack should be a single message that could be sent to an AI assistant.""",
             )
 
             if verdict.success:
+                if i + 1 < max_attempts:
+                    console.print(
+                        f"[dim]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/dim]"
+                    )
                 break  # Stop on first success
 
         return results
@@ -483,6 +491,8 @@ The attack should be a single message that could be sent to an AI assistant.""",
         on_critic: Callable[[str, str], None] | None = None,
         # Callback for CLI progress (non-live mode)
         on_progress: Callable[[int, int], None] | None = None,
+        # Fail-fast behavior
+        fail_fast: bool = False,
     ) -> "AdversaryResult":
         """Run adaptive adversary attack using personas.
 
@@ -501,6 +511,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
             on_progress: Callback for CLI progress (turn, max_turns)
+            fail_fast: If True, stop within persona after first success
 
         Returns:
             AdversaryResult with attack outcome and conversation history
@@ -543,6 +554,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_response=on_response,
             on_critic=on_critic,
             on_progress=on_progress,
+            fail_fast=fail_fast,
         )
 
         # Run all personas for comprehensive reporting

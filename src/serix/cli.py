@@ -33,6 +33,32 @@ app = typer.Typer(
 console = Console()
 
 
+def _version_callback(value: bool) -> None:
+    """Print version and exit."""
+    if value:
+        from serix import __version__
+
+        typer.echo(f"serix {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Serix - AI agent testing framework."""
+    pass
+
+
 def _is_interactive() -> bool:
     """Check if running in an interactive terminal (TTY).
 
@@ -434,6 +460,7 @@ def attack(
                 vulnerability_type=atk.strategy,
                 agent_response=atk.response or "",
                 owasp_code="LLM01",
+                strategy_id=atk.strategy,
             )
             if store.save(attack_to_store):
                 saved_count += 1
@@ -545,10 +572,11 @@ def test(
         bool,
         typer.Option("--save-all", help="Save all attacks including failed ones"),
     ] = False,
-    no_fail_fast: Annotated[
+    fail_fast: Annotated[
         bool,
         typer.Option(
-            "--no-fail-fast", help="Continue running even if regression check fails"
+            "--fail-fast",
+            help="Stop on first success within each persona (faster, incomplete report)",
         ),
     ] = False,
     skip_mitigated: Annotated[
@@ -556,6 +584,13 @@ def test(
         typer.Option(
             "--skip-mitigated",
             help="Skip attacks that have been mitigated (faster runs)",
+        ),
+    ] = False,
+    no_immune: Annotated[
+        bool,
+        typer.Option(
+            "--no-immune",
+            help="Skip immune check entirely (for attack collection workflow)",
         ),
     ] = False,
     # Fuzzing parameters
@@ -667,10 +702,12 @@ def test(
         )
 
     # Validate target
-    if final_target is None:
+    if not final_target:
         console.print(
-            "[red]Error:[/red] Target is required. "
-            "Provide as argument or in config file."
+            "[red]Error:[/red] No target specified.\n\n"
+            "Either:\n"
+            "  1. Provide on command line: serix test my_agent.py:my_agent\n"
+            '  2. Add to config file: target = "my_agent.py:my_agent"'
         )
         raise typer.Exit(1)
 
@@ -744,10 +781,11 @@ def test(
             raise typer.Exit(1)
     else:
         console.print(
-            "[red]Error:[/red] Invalid target format. Use:\n"
+            f"[red]Error:[/red] Invalid target format: '{final_target}'\n\n"
+            "Expected one of:\n"
             "  - file.py:function_name (decorated function)\n"
             "  - file.py:ClassName (Agent subclass)\n"
-            "  - http://url (HTTP endpoint)"
+            "  - http://... or https://... (HTTP endpoint)"
         )
         raise typer.Exit(1)
 
@@ -873,17 +911,26 @@ def test(
     store = AttackStore()
     stored_count = store.count()
 
-    if stored_count > 0:
-        print_immune_check_start(stored_count)
+    if stored_count > 0 and not no_immune:
+        # Calculate actual replay count when skip_mitigated is True
+        if skip_mitigated:
+            attacks_to_replay = len(store.load_all(skip_mitigated=True))
+            skipped_count = stored_count - attacks_to_replay
+            print_immune_check_start(attacks_to_replay, stored_count, skipped_count)
+            planned_count = attacks_to_replay
+        else:
+            print_immune_check_start(stored_count)
+            planned_count = stored_count
+
         runner = RegressionRunner(store, attacker_client)
         regression_result = runner.run_immune_check(
             target=target_obj,
             goal=goal_list[0],  # Use first goal for regression check
-            fail_fast=not no_fail_fast,
+            fail_fast=fail_fast,
             skip_mitigated=skip_mitigated,
         )
         print_immune_check_result(
-            regression_result.passed, regression_result.total_checked
+            regression_result.passed, regression_result.total_checked, planned_count
         )
 
         # Handle regression: defended → exploited (critical)
@@ -892,7 +939,7 @@ def test(
                 "[red bold]⚠️  REGRESSION DETECTED:[/red bold] "
                 "Previously mitigated attack is now exploitable!"
             )
-            if not no_fail_fast:
+            if fail_fast:
                 should_prompt = _is_interactive() and not yes
                 if should_prompt:
                     if not typer.confirm("Continue with new tests?", default=False):
@@ -905,15 +952,15 @@ def test(
 
         if regression_result.failed > 0:
             # Determine if we should prompt or fail
-            should_prompt = _is_interactive() and not no_fail_fast and not yes
+            should_prompt = _is_interactive() and fail_fast and not yes
 
             print_regression_failure(
                 regression_result.failed_attacks,
-                fail_fast=not no_fail_fast,
+                fail_fast=fail_fast,
                 will_prompt=should_prompt,
             )
 
-            if not no_fail_fast:
+            if fail_fast:
                 if should_prompt:
                     # Interactive mode: ask user if they want to continue
                     if not typer.confirm("Continue with new tests?", default=True):
@@ -923,6 +970,8 @@ def test(
                     # Non-interactive without --yes: fail immediately
                     raise typer.Exit(1)
                 # With --yes: continue without prompting
+    elif not no_immune:
+        console.print("[dim]No stored attacks for Immune Check[/dim]")
 
     # Track results per goal for multi-goal support
     from dataclasses import dataclass as dc
@@ -976,6 +1025,7 @@ def test(
                         on_attack=ui.update_attacker_message,
                         on_response=ui.update_agent_response,
                         on_critic=ui.update_critic,
+                        fail_fast=fail_fast,
                     )
 
                     # Update UI with evaluation
@@ -1058,6 +1108,7 @@ def test(
                         max_turns=depth,
                         system_prompt=system_prompt,
                         on_progress=progress_signal,
+                        fail_fast=fail_fast,
                     )
 
                     # Print fix suggestions if available
@@ -1216,6 +1267,7 @@ def test(
                                 else ""
                             ),
                             owasp_code=owasp,
+                            strategy_id=result.persona_used or "unknown",
                         )
                         if store.save(attack_to_save):
                             saved_count += 1
@@ -1314,7 +1366,7 @@ def test(
             results = engine.attack_target(
                 target=target_obj,
                 goal=current_goal,
-                max_attempts=8,  # All static templates
+                max_attempts=depth,  # Use depth parameter for template count
             )
             all_static_results.append((current_goal, results))
 
@@ -1370,6 +1422,7 @@ def test(
                     vulnerability_type=atk.strategy,
                     agent_response=atk.response or "",
                     owasp_code="LLM01",
+                    strategy_id=atk.strategy,
                 )
                 if store.save(attack_to_save):
                     saved_count += 1
@@ -1516,7 +1569,9 @@ def demo(
     if verbose:
         cmd.append("--verbose")
     if force:
-        cmd.append("--no-fail-fast")
+        # With new default (run all), --force is no longer needed
+        # but we keep it for backwards compat - it's a no-op now
+        pass
 
     # Run as subprocess
     result = subprocess.run(cmd)

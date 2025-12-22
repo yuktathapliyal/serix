@@ -29,6 +29,7 @@ class StoredAttack:
         current_status: 'exploited' or 'defended'
         judge_reasoning: Latest reasoning from judge LLM
         agent_response: The agent's response to the attack
+        strategy_id: Attack strategy identifier for deduplication (e.g., 'grandma_exploit')
     """
 
     id: str
@@ -42,6 +43,7 @@ class StoredAttack:
     current_status: str  # 'exploited' or 'defended'
     judge_reasoning: str
     agent_response: str
+    strategy_id: str = "unknown"
 
     @classmethod
     def create(
@@ -52,8 +54,18 @@ class StoredAttack:
         agent_response: str,
         owasp_code: str = "LLM01",
         judge_reasoning: str = "",
+        strategy_id: str = "unknown",
     ) -> "StoredAttack":
         """Create a new StoredAttack with auto-generated id and timestamps.
+
+        Args:
+            goal: The attack goal that was attempted
+            payload: The exact prompt used in the attack
+            vulnerability_type: Category (jailbreak, pii_leak, etc.)
+            agent_response: The agent's response to the attack
+            owasp_code: OWASP classification (default: LLM01)
+            judge_reasoning: Latest reasoning from judge LLM
+            strategy_id: Attack strategy for deduplication (e.g., 'grandma_exploit')
 
         Returns:
             StoredAttack instance ready for storage
@@ -71,6 +83,7 @@ class StoredAttack:
             current_status="exploited",
             judge_reasoning=judge_reasoning,
             agent_response=agent_response,
+            strategy_id=strategy_id,
         )
 
 
@@ -85,21 +98,35 @@ class AttackStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def save(self, attack: StoredAttack) -> bool:
-        """Save attack to storage.
+        """Save attack to storage with upsert by (goal, strategy_id).
+
+        Deduplication uses (goal, strategy_id) composite key:
+        - Same goal + same strategy = overwrite (fixes LLM jitter)
+        - Different goal + same strategy = keep both (different security context)
 
         Returns:
-            True if saved, False if duplicate (by payload hash)
+            True if saved (new or updated), False should not happen with upsert
         """
         self._ensure_dir()
 
         existing = self.load_all()
 
-        # Check for duplicate payload
-        existing_hashes = {a.payload_hash for a in existing}
-        if attack.payload_hash in existing_hashes:
-            return False
+        # Find existing attack with same (goal, strategy_id) - upsert logic
+        existing_index = next(
+            (
+                i
+                for i, a in enumerate(existing)
+                if a.goal == attack.goal and a.strategy_id == attack.strategy_id
+            ),
+            None,
+        )
 
-        existing.append(attack)
+        if existing_index is not None:
+            # Overwrite existing record (fixes jitter duplicates)
+            existing[existing_index] = attack
+        else:
+            # New (goal, strategy_id) combination
+            existing.append(attack)
 
         # Prune old attacks per type
         existing = self._prune_old(existing)
@@ -164,6 +191,7 @@ class AttackStore:
             "current_status": "exploited",  # Assume exploited for legacy
             "judge_reasoning": "",
             "agent_response": item.get("agent_response", ""),
+            "strategy_id": item.get("strategy_id", "unknown"),
         }
 
     def load_by_type(self, vuln_type: str) -> list[StoredAttack]:
