@@ -1135,6 +1135,36 @@
             </div>
         </div>
 
+        {% if report.goal_results and report.goal_results|length > 1 %}
+        <!-- Multi-Goal Matrix -->
+        <div class="section">
+            <h3>Goal Attack Matrix</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                {{ report.goal_results | length }} goals tested
+            </p>
+            <div class="attacks-table">
+                <div class="table-header" style="grid-template-columns: 1fr 100px 150px 80px;">
+                    <div>Goal</div>
+                    <div>Result</div>
+                    <div>Successful Persona</div>
+                    <div>Turns</div>
+                </div>
+                {% for gr in report.goal_results %}
+                <div class="table-row" style="grid-template-columns: 1fr 100px 150px 80px;">
+                    <div class="payload-preview" title="{{ gr.goal }}">{{ gr.goal | truncate(60) }}</div>
+                    <div>
+                        <span class="badge {{ 'exploited' if not gr.passed else 'defended' }}">
+                            {{ 'Exploited' if not gr.passed else 'Defended' }}
+                        </span>
+                    </div>
+                    <div>{{ gr.successful_persona or '-' }}</div>
+                    <div>{{ gr.turns_taken }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Score Dashboard -->
         <div class="score-dashboard">
             <!-- Overall Score (large) -->

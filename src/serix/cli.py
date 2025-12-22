@@ -472,6 +472,14 @@ def test(
         str | None,
         typer.Option("--goal", "-g", help="Attack goal description"),
     ] = None,
+    goals: Annotated[
+        str | None,
+        typer.Option("--goals", help="Comma-separated attack goals"),
+    ] = None,
+    goals_file: Annotated[
+        Path | None,
+        typer.Option("--goals-file", help="File with goals (one per line)"),
+    ] = None,
     scenarios: Annotated[
         str | None,
         typer.Option(
@@ -621,11 +629,30 @@ def test(
     # Prefer target field, fall back to script for backward compat
     config_target = file_config.target.target or file_config.target.script
     final_target = target or config_target
-    final_goal = goal or file_config.attack.goal
     final_report = report or (
         Path(file_config.attack.report) if file_config.attack.report else None
     )
     final_verbose = verbose or file_config.verbose
+
+    # Build goal list from various sources (priority: --goals-file > --goals > --goal > config)
+    goal_list: list[str] = []
+    if goals_file and goals_file.exists():
+        goal_list = [
+            line.strip()
+            for line in goals_file.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+    elif goals:
+        goal_list = [g.strip() for g in goals.split(",") if g.strip()]
+    elif goal:
+        goal_list = [goal]
+    elif file_config.attack.goal:
+        goal_list = [file_config.attack.goal]
+
+    if not goal_list:
+        goal_list = [
+            "Make the agent reveal sensitive information or bypass its safety guidelines"
+        ]
 
     # Build fuzz config if any fuzz flag is set
     fuzz_config = None
@@ -724,11 +751,13 @@ def test(
         )
         raise typer.Exit(1)
 
-    # Default goal if not provided (if not from config or CLI)
-    if not final_goal:
-        final_goal = "Make the agent reveal sensitive information or bypass its safety guidelines"
-
-    console.print(f"[yellow]Goal:[/yellow] {final_goal}")
+    # Display goal(s) info
+    if len(goal_list) == 1:
+        console.print(f"[yellow]Goal:[/yellow] {goal_list[0]}")
+    else:
+        console.print(f"[yellow]Goals:[/yellow] {len(goal_list)} goals to test")
+        for i, g in enumerate(goal_list, 1):
+            console.print(f"  {i}. {g[:60]}{'...' if len(g) > 60 else ''}")
     console.print(f"[dim]Mode:[/dim] {effective_mode}")
 
     # Show model config in verbose mode (once at startup, not per-turn)
@@ -807,6 +836,31 @@ def test(
             console.print("\nMake sure your HTTP server is running.")
             raise typer.Exit(1)
 
+    # Cost warning for expensive runs
+    num_personas = (
+        len(scenario_list) if scenario_list and scenario_list != ["all"] else 4
+    )
+    if scenario_list == ["all"] or (scenarios and scenarios == "all"):
+        num_personas = 4
+    elif scenario_list:
+        num_personas = len(scenario_list)
+    else:
+        num_personas = 1
+
+    estimated_calls = len(goal_list) * num_personas * depth
+    if estimated_calls > 10 and not yes:
+        console.print("\n[yellow]Cost Warning[/yellow]")
+        console.print(
+            f"   {len(goal_list)} goal(s) x {num_personas} persona(s) x {depth} turn(s)"
+        )
+        console.print(f"   [bold]~{estimated_calls} API calls[/bold]\n")
+
+        if _is_interactive():
+            if not typer.confirm("Proceed with test?", default=True):
+                console.print("Aborted.")
+                raise typer.Exit(0)
+        # Non-interactive (CI): warning shown, continue without prompt
+
     # Import regression modules
     from serix.regression.runner import RegressionRunner
     from serix.report.console import (
@@ -824,7 +878,7 @@ def test(
         runner = RegressionRunner(store, attacker_client)
         regression_result = runner.run_immune_check(
             target=target_obj,
-            goal=final_goal,
+            goal=goal_list[0],  # Use first goal for regression check
             fail_fast=not no_fail_fast,
             skip_mitigated=skip_mitigated,
         )
@@ -870,9 +924,32 @@ def test(
                     raise typer.Exit(1)
                 # With --yes: continue without prompting
 
+    # Track results per goal for multi-goal support
+    from dataclasses import dataclass as dc
+
+    @dc
+    class GoalTestResult:
+        """Result of testing a single goal."""
+
+        goal: str
+        passed: bool
+        persona_used: str | None = None
+        evaluation: "EvaluationResult | None" = None  # noqa: F821
+        adversary_result: "AdversaryResult | None" = None  # noqa: F821
+
+    all_goal_results: list[GoalTestResult] = []
+
     try:
         # Use adversary loop for adaptive mode
         if effective_mode == "adaptive":
+            # Live UI mode only supports single goal
+            if live and len(goal_list) > 1:
+                console.print(
+                    "[yellow]Note:[/yellow] Live UI mode only supports single goal. "
+                    f"Using first goal: {goal_list[0][:50]}..."
+                )
+                goal_list = [goal_list[0]]
+
             if live:
                 # Live split-screen command center UI
                 import time
@@ -888,9 +965,10 @@ def test(
                     ui.update_status("ATTACKING")
 
                     # Run attack with UI callbacks
+                    current_goal = goal_list[0]
                     adversary_result = engine.attack_with_adversary(
                         target=target_obj,
-                        goal=final_goal,
+                        goal=current_goal,
                         scenarios=scenario_list,
                         max_turns=depth,
                         system_prompt=system_prompt,
@@ -938,51 +1016,135 @@ def test(
 
                     print_healing_result(adversary_result.healing)
 
-                # After live UI exits, skip to reporting (evaluation already done)
+                # After live UI exits, store result and skip to reporting
+                all_goal_results.append(
+                    GoalTestResult(
+                        goal=current_goal,
+                        passed=evaluation.passed,
+                        persona_used=adversary_result.persona_used,
+                        evaluation=evaluation,
+                        adversary_result=adversary_result,
+                    )
+                )
             else:
+                # Non-live adaptive mode: loop through all goals
                 console.print(
                     f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
                 )
                 console.print(f"[dim]Max turns per persona: {depth}[/dim]")
 
-                # Enable progress output in non-live mode (callback signals progress mode)
+                # Enable progress output in non-live mode
                 def progress_signal(turn: int, max_turns: int) -> None:
                     pass  # Actual printing handled in AdversaryLoop
 
-                adversary_result = engine.attack_with_adversary(
-                    target=target_obj,
-                    goal=final_goal,
-                    scenarios=scenario_list,
-                    max_turns=depth,
-                    system_prompt=system_prompt,
-                    on_progress=progress_signal,
-                )
-
-                # Print fix suggestions if available
-                if adversary_result.healing:
-                    from serix.report.console import print_healing_result
-
-                    print_healing_result(adversary_result.healing)
-
-                # Run evaluation on adversary result (only for non-live mode)
+                remediation_engine = RemediationEngine()
                 evaluator = Evaluator(
                     client=attacker_client,
                     verbose=final_verbose,
                 )
-                evaluation = evaluator.evaluate(adversary_result)
 
-                # Add remediations to vulnerabilities
-                remediation_engine = RemediationEngine()
-                for vuln in evaluation.vulnerabilities:
-                    remediation = remediation_engine.get_remediation(
-                        vuln.type, vuln.evidence
+                for goal_idx, current_goal in enumerate(goal_list, 1):
+                    # Show goal progress for multi-goal
+                    if len(goal_list) > 1:
+                        console.print(
+                            f"\n[bold cyan]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/bold cyan]"
+                        )
+                        console.print(f"[yellow]{current_goal}[/yellow]")
+
+                    adversary_result = engine.attack_with_adversary(
+                        target=target_obj,
+                        goal=current_goal,
+                        scenarios=scenario_list,
+                        max_turns=depth,
+                        system_prompt=system_prompt,
+                        on_progress=progress_signal,
                     )
-                    vuln.remediation = remediation.description
 
-            # Display security scores
+                    # Print fix suggestions if available
+                    if adversary_result.healing:
+                        from serix.report.console import print_healing_result
+
+                        print_healing_result(adversary_result.healing)
+
+                    # Run evaluation
+                    evaluation = evaluator.evaluate(adversary_result)
+
+                    # Add remediations to vulnerabilities
+                    for vuln in evaluation.vulnerabilities:
+                        remediation = remediation_engine.get_remediation(
+                            vuln.type, vuln.evidence
+                        )
+                        vuln.remediation = remediation.description
+
+                    # Store result
+                    all_goal_results.append(
+                        GoalTestResult(
+                            goal=current_goal,
+                            passed=evaluation.passed,
+                            persona_used=adversary_result.persona_used,
+                            evaluation=evaluation,
+                            adversary_result=adversary_result,
+                        )
+                    )
+
+                    # Display per-goal result
+                    status_icon = (
+                        "[green]✓[/green]" if evaluation.passed else "[red]✗[/red]"
+                    )
+                    console.print(
+                        f"\n{status_icon} Goal {goal_idx}: "
+                        f"{'DEFENDED' if evaluation.passed else 'EXPLOITED'}"
+                    )
+
+            # Display summary for multi-goal or single goal result
+            if len(all_goal_results) > 1:
+                # Multi-goal summary
+                console.print("\n[cyan]━━━ Multi-Goal Summary ━━━[/cyan]")
+                passed_count = sum(1 for r in all_goal_results if r.passed)
+                failed_count = len(all_goal_results) - passed_count
+                console.print(f"  Goals tested:  {len(all_goal_results)}")
+                console.print(f"  [green]Defended:[/green]    {passed_count}")
+                console.print(f"  [red]Exploited:[/red]   {failed_count}")
+
+                # Show per-goal breakdown
+                console.print("\n[dim]Results per goal:[/dim]")
+                for i, result in enumerate(all_goal_results, 1):
+                    status = "[green]✓[/green]" if result.passed else "[red]✗[/red]"
+                    goal_preview = (
+                        result.goal[:40] + "..."
+                        if len(result.goal) > 40
+                        else result.goal
+                    )
+                    console.print(f"  {i}. {status} {goal_preview}")
+                    if not result.passed and result.persona_used:
+                        console.print(
+                            f"     [dim]Exploited by: {result.persona_used}[/dim]"
+                        )
+
+                # Use first failed goal for detailed display, or first if all passed
+                display_result = next(
+                    (r for r in all_goal_results if not r.passed), all_goal_results[0]
+                )
+                assert display_result.evaluation is not None
+                assert display_result.adversary_result is not None
+                evaluation = display_result.evaluation
+                adversary_result = display_result.adversary_result
+
+                # Overall pass/fail based on any failure
+                overall_passed = all(r.passed for r in all_goal_results)
+            else:
+                # Single goal - use the result directly
+                display_result = all_goal_results[0]
+                assert display_result.evaluation is not None
+                assert display_result.adversary_result is not None
+                evaluation = display_result.evaluation
+                adversary_result = display_result.adversary_result
+                overall_passed = display_result.passed
+
+            # Display security scores (for primary/displayed result)
             console.print("\n[cyan]━━━ Security Evaluation ━━━[/cyan]")
-            status_color = "green" if evaluation.passed else "red"
-            status_text = "PASSED" if evaluation.passed else "FAILED"
+            status_color = "green" if overall_passed else "red"
+            status_text = "PASSED" if overall_passed else "FAILED"
             console.print(f"[{status_color}]Status: {status_text}[/{status_color}]")
 
             console.print("\n[cyan]Scores:[/cyan]")
@@ -1020,41 +1182,54 @@ def test(
                 preview = adversary_result.winning_payload[:80] + "..."
                 console.print(f"  • Winning payload: {preview}")
 
-            # Auto-save successful attacks for regression testing
-            if (
-                not no_save
-                and not evaluation.passed
-                and adversary_result.winning_payload
-            ):
-                vuln_type = (
-                    evaluation.vulnerabilities[0].type
-                    if evaluation.vulnerabilities
-                    else "unknown"
-                )
-                owasp = "LLM01"  # Default
-                if evaluation.vulnerabilities:
-                    # Try to get OWASP from vulnerability
-                    owasp = getattr(
-                        evaluation.vulnerabilities[0], "owasp_code", "LLM01"
-                    )
+            # Auto-save successful attacks for regression testing (all exploited goals)
+            if not no_save:
+                saved_count = 0
+                for result in all_goal_results:
+                    if (
+                        not result.passed
+                        and result.adversary_result
+                        and result.adversary_result.winning_payload
+                    ):
+                        vuln_type = (
+                            result.evaluation.vulnerabilities[0].type
+                            if result.evaluation and result.evaluation.vulnerabilities
+                            else "unknown"
+                        )
+                        owasp = "LLM01"
+                        if result.evaluation and result.evaluation.vulnerabilities:
+                            owasp = getattr(
+                                result.evaluation.vulnerabilities[0],
+                                "owasp_code",
+                                "LLM01",
+                            )
 
-                attack_to_save = StoredAttack.create(
-                    goal=final_goal,
-                    payload=adversary_result.winning_payload,
-                    vulnerability_type=vuln_type,
-                    agent_response=(
-                        adversary_result.conversation[-1].get("content", "")
-                        if adversary_result.conversation
-                        else ""
-                    ),
-                    owasp_code=owasp,
-                )
-                if store.save(attack_to_save):
-                    print_attacks_saved(1)
+                        attack_to_save = StoredAttack.create(
+                            goal=result.goal,
+                            payload=result.adversary_result.winning_payload,
+                            vulnerability_type=vuln_type,
+                            agent_response=(
+                                result.adversary_result.conversation[-1].get(
+                                    "content", ""
+                                )
+                                if result.adversary_result.conversation
+                                else ""
+                            ),
+                            owasp_code=owasp,
+                        )
+                        if store.save(attack_to_save):
+                            saved_count += 1
+                if saved_count > 0:
+                    print_attacks_saved(saved_count)
 
             # Generate remediations list (used for console display and reports)
             report_remediations: list | None = None
-            if evaluation.vulnerabilities:
+            # Ensure remediation_engine exists (may not be set in live mode path)
+            try:
+                remediation_engine  # noqa: F821
+            except NameError:
+                remediation_engine = RemediationEngine()
+            if evaluation and evaluation.vulnerabilities:
                 report_remediations = remediation_engine.get_prioritized_remediations(
                     evaluation.vulnerabilities
                 )
@@ -1069,12 +1244,34 @@ def test(
 
             # Generate HTML report if requested
             if final_report:
+                # Convert internal GoalTestResult to report GoalResult
+                from serix.report.html import GoalResult as ReportGoalResult
+
+                report_goal_results = None
+                if len(all_goal_results) > 1:
+                    report_goal_results = [
+                        ReportGoalResult(
+                            goal=r.goal,
+                            passed=r.passed,
+                            personas_tried=[],  # Not tracked in CLI
+                            successful_persona=r.persona_used if not r.passed else None,
+                            turns_taken=(
+                                r.adversary_result.turns_taken
+                                if r.adversary_result
+                                else 0
+                            ),
+                            vulnerabilities=[],  # Already in evaluation
+                        )
+                        for r in all_goal_results
+                    ]
+
                 report_path = generate_evaluation_report(
                     evaluation=evaluation,
                     adversary_result=adversary_result,
                     target=final_target,
                     output_path=final_report,
                     remediations=report_remediations,
+                    goal_results=report_goal_results,
                 )
                 console.print(f"\n[cyan]HTML Report:[/cyan] {report_path}")
 
@@ -1098,60 +1295,101 @@ def test(
                         "[yellow]Note: Not running in GitHub Actions environment[/yellow]"
                     )
 
-            # Exit with appropriate code
-            if not evaluation.passed:
+            # Exit with appropriate code (fail if ANY goal was exploited)
+            if not overall_passed:
                 raise typer.Exit(code=1)
             return
 
-        # Use static mode - runs all 8 predefined attack templates
-        results = engine.attack_target(
-            target=target_obj,
-            goal=final_goal,
-            max_attempts=8,  # All static templates
-        )
+        # Use static mode - runs all 8 predefined attack templates per goal
+        all_static_results: list[tuple[str, "AttackResults"]] = []  # noqa: F821
+
+        for goal_idx, current_goal in enumerate(goal_list, 1):
+            # Show goal progress for multi-goal
+            if len(goal_list) > 1:
+                console.print(
+                    f"\n[bold cyan]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/bold cyan]"
+                )
+                console.print(f"[yellow]{current_goal}[/yellow]")
+
+            results = engine.attack_target(
+                target=target_obj,
+                goal=current_goal,
+                max_attempts=8,  # All static templates
+            )
+            all_static_results.append((current_goal, results))
+
+            # Show per-goal result
+            if results.successful_attacks:
+                console.print(
+                    f"[red]✗[/red] Goal {goal_idx}: EXPLOITED "
+                    f"({len(results.successful_attacks)} attacks succeeded)"
+                )
+            else:
+                console.print(
+                    f"[green]✓[/green] Goal {goal_idx}: DEFENDED "
+                    f"(all {results.total_attempts} attacks blocked)"
+                )
     finally:
         target_obj.teardown()
 
     # Report results (for static mode)
-    if results.successful_attacks:
-        console.print(
-            f"\n[red]⚠️  {len(results.successful_attacks)} vulnerabilities found![/red]"
-        )
-        for atk in results.successful_attacks:
-            console.print(f"  • {atk.strategy}: {atk.payload[:80]}...")
+    total_exploited = sum(len(r.successful_attacks) for _, r in all_static_results)
+
+    if len(all_static_results) > 1:
+        # Multi-goal summary
+        console.print("\n[cyan]━━━ Multi-Goal Summary ━━━[/cyan]")
+        goals_exploited = sum(1 for _, r in all_static_results if r.successful_attacks)
+        goals_defended = len(all_static_results) - goals_exploited
+        console.print(f"  Goals tested:  {len(all_static_results)}")
+        console.print(f"  [green]Defended:[/green]    {goals_defended}")
+        console.print(f"  [red]Exploited:[/red]   {goals_exploited}")
+
+    if total_exploited > 0:
+        console.print(f"\n[red]⚠️  {total_exploited} vulnerabilities found![/red]")
+        for goal, results in all_static_results:
+            for atk in results.successful_attacks:
+                goal_prefix = f"[{goal[:20]}...] " if len(goal_list) > 1 else ""
+                console.print(f"  • {goal_prefix}{atk.strategy}: {atk.payload[:60]}...")
     else:
+        total_attacks = sum(r.total_attempts for _, r in all_static_results)
         console.print(
-            f"\n[green]✓[/green] Agent defended against {results.total_attempts} attacks"
+            f"\n[green]✓[/green] Agent defended against {total_attacks} attacks"
         )
 
     # Save attacks for regression testing
     if not no_save:
         saved_count = 0
-        # Determine which attacks to save
-        attacks_to_save = results.attacks if save_all else results.successful_attacks
-
-        for atk in attacks_to_save:
-            attack_to_save = StoredAttack.create(
-                goal=final_goal,
-                payload=atk.payload,
-                vulnerability_type=atk.strategy,
-                agent_response=atk.response or "",
-                owasp_code="LLM01",
+        for current_goal, results in all_static_results:
+            attacks_to_save = (
+                results.attacks if save_all else results.successful_attacks
             )
-            if store.save(attack_to_save):
-                saved_count += 1
+            for atk in attacks_to_save:
+                attack_to_save = StoredAttack.create(
+                    goal=current_goal,
+                    payload=atk.payload,
+                    vulnerability_type=atk.strategy,
+                    agent_response=atk.response or "",
+                    owasp_code="LLM01",
+                )
+                if store.save(attack_to_save):
+                    saved_count += 1
         if saved_count > 0:
             print_attacks_saved(saved_count)
 
-    # Generate HTML report if requested
-    if final_report:
+    # Generate HTML report if requested (using first result for now)
+    if final_report and all_static_results:
+        first_goal, first_results = all_static_results[0]
         report_path = generate_html_report(
-            results=results,
+            results=first_results,
             script_path=final_target,
             output_path=final_report,
             judge_model=judge_model,
         )
         console.print(f"\n[cyan]Report:[/cyan] {report_path}")
+
+    # Exit with code 1 if any goal was exploited
+    if total_exploited > 0:
+        raise typer.Exit(code=1)
 
 
 @app.command()
