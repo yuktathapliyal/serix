@@ -17,7 +17,6 @@ import openai
 import typer
 from dotenv import load_dotenv
 from openai import OpenAI as OriginalOpenAI  # Save BEFORE any patching!
-from rich.console import Console
 
 from serix.core.client import (
     SerixClient,
@@ -27,6 +26,8 @@ from serix.core.client import (
 )
 from serix.core.recorder import load_recording, save_recording
 from serix.core.types import RecordingSession, SerixConfig, SerixMode
+from serix.ui import BULLET, FAILURE, SUCCESS, get_console, render
+from serix.ui.theme import is_interactive as ui_is_interactive
 
 # Store original OpenAI class immediately
 set_original_openai_class(OriginalOpenAI)
@@ -34,9 +35,10 @@ set_original_openai_class(OriginalOpenAI)
 app = typer.Typer(
     name="serix",
     help="AI agent testing framework with recording, replay, and fuzzing.",
-    no_args_is_help=True,
+    no_args_is_help=False,  # We handle this in the callback
+    add_completion=False,
 )
-console = Console()
+console = get_console()
 
 
 def _version_callback(value: bool) -> None:
@@ -46,6 +48,160 @@ def _version_callback(value: bool) -> None:
 
         typer.echo(f"serix {__version__}")
         raise typer.Exit()
+
+
+def _help_callback(ctx: typer.Context, value: bool) -> None:
+    """Custom help callback with Serix visual identity."""
+    if not value:
+        return
+
+    from serix import __version__
+
+    console.print()  # Visual separation from command prompt
+
+    # Show banner (only in interactive mode)
+    if ui_is_interactive():
+        render.banner(console, __version__)
+    else:
+        console.print(f"[serix.brand]SERIX[/] v{__version__}")
+    console.print()
+
+    # Show description
+    console.print(
+        "AI agent security testing framework with red teaming, recording, and replay."
+    )
+    console.print()
+
+    # Commands list with descriptions
+    commands = [
+        ("test", "Execute adversarial security campaigns against an agent"),
+        ("demo", "Run the bundled vulnerable agent for quick verification"),
+        ("run", "Execute a script with interception and optional fault injection"),
+        ("record", "Capture a test session for deterministic playback"),
+        ("replay", "Run against recorded session (deterministic)"),
+        ("init", "Scaffold a new serix.toml configuration file"),
+    ]
+    render.command_list(console, commands)
+    console.print()
+
+    # Options
+    options = [
+        ("--version, -V", "", "Show version and exit"),
+        ("--help", "", "Show this message and exit"),
+    ]
+    render.option_list(console, options)
+    console.print()
+
+    # Usage tip
+    console.print(
+        "[serix.muted]Run 'serix <command> --help' for command-specific options.[/]"
+    )
+    console.print()  # Trailing newline for visual separation
+
+    raise typer.Exit()
+
+
+def _test_help_callback(ctx: typer.Context, value: bool) -> None:
+    """Custom help callback for test command with grouped options."""
+    if not value:
+        return
+
+    console.print()
+    render.section_header(console, "Agent Testing")
+
+    # Description (crisp one-liner)
+    console.print("Test an agent with security scenarios (static or adaptive).")
+    console.print()
+
+    # Usage
+    console.print("[serix.brand]Usage:[/]")
+    console.print("  serix test [TARGET] [OPTIONS]")
+
+    render.rule(console)
+
+    # Define all option groups upfront for global alignment calculation
+    core_opts = [
+        ("--mode, -m", "TEXT", "adaptive (multi-turn) | static (single-shot)"),
+        ("--goal, -g", "TEXT", "Primary objective for the adversarial engine"),
+        ("--goals", "TEXT", "Run sequential campaigns for multiple objectives"),
+        ("--goals-file", "PATH", "Load objectives from a line-delimited file"),
+        (
+            "--scenarios, -s",
+            "TEXT",
+            "Select attack vectors (jailbreak, data_leak, all)",
+        ),
+        ("--depth, -d", "INT", "Max turns (adaptive) or template limit (static)"),
+    ]
+    report_opts = [
+        ("--report, -r", "PATH", "Generate comprehensive HTML security report"),
+        ("--json-report, -j", "PATH", "Export telemetry to JSON for CI/CD"),
+        ("--github", "FLAG", "Output annotations for GitHub Actions"),
+        ("--live", "FLAG", "Enable interactive live interface"),
+    ]
+    http_opts = [
+        ("--input-field", "TEXT", "JSON key for user input (default: message)"),
+        ("--output-field", "TEXT", "JSON key for agent response (default: response)"),
+        ("--headers", "TEXT", "HTTP headers as JSON (e.g., Authorization)"),
+    ]
+    advanced_opts = [
+        ("--fuzz", "FLAG", "Inject fault conditions (latency, errors, corruption)"),
+        ("--fail-fast", "FLAG", "Abort campaign on first exploit"),
+        ("--skip-mitigated", "FLAG", "Skip tests for resolved vulnerabilities"),
+        ("--config, -c", "PATH", "Path to serix.toml configuration"),
+        ("--yes, -y", "FLAG", "Bypass prompts (non-interactive mode)"),
+    ]
+
+    # Calculate global column widths
+    col_widths = render.calc_option_widths(
+        [core_opts, report_opts, http_opts, advanced_opts]
+    )
+    key_flags = {"--mode, -m", "--goal, -g"}
+
+    # Target types (aligned to global first column)
+    render.target_list(
+        console,
+        [
+            ("Python function", "path/to/file.py:function_name"),
+            ("Agent class", "path/to/file.py:ClassName"),
+            ("HTTP endpoint", "http://localhost:8000/chat"),
+        ],
+        col_width=col_widths[0],
+    )
+    console.print()
+    console.print(
+        "  [serix.muted]💡 ProTip: Use @serix.scan() decorator for auto-configuration.[/]"
+    )
+
+    render.rule(console)
+
+    # Core options
+    render.option_group(console, "Core", core_opts, col_widths, key_flags)
+
+    render.rule(console)
+
+    # Reports
+    render.option_group(console, "Reports", report_opts, col_widths, key_flags)
+
+    render.rule(console)
+
+    # HTTP-only
+    render.option_group(console, "HTTP-only", http_opts, col_widths, key_flags)
+
+    render.rule(console)
+
+    # Advanced
+    render.option_group(console, "Advanced", advanced_opts, col_widths, key_flags)
+
+    render.rule(console)
+
+    # Examples (golden-path)
+    console.print("[serix.brand]Examples:[/]")
+    console.print('  serix test agent.py:my_agent --goal "reveal secrets"')
+    console.print("  serix test http://localhost:8000/chat --mode static")
+    console.print("  serix test --config serix.toml")
+    console.print()
+
+    raise typer.Exit()
 
 
 def _build_config_snapshot(
@@ -89,8 +245,9 @@ def _build_config_snapshot(
     return snapshot
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: Annotated[
         bool,
         typer.Option(
@@ -101,17 +258,26 @@ def main(
             help="Show version and exit.",
         ),
     ] = False,
+    help_flag: Annotated[
+        bool,
+        typer.Option(
+            "--help",
+            "-h",
+            callback=_help_callback,
+            is_eager=True,
+            help="Show help and exit.",
+        ),
+    ] = False,
 ) -> None:
     """Serix - AI agent testing framework."""
-    pass
+    # If no subcommand was invoked, show help
+    if ctx.invoked_subcommand is None:
+        _help_callback(ctx, True)
 
 
 def _is_interactive() -> bool:
-    """Check if running in an interactive terminal (TTY).
-
-    Returns True for local dev (terminal), False for CI/piped output.
-    """
-    return sys.stdin.isatty() and sys.stdout.isatty()
+    """Check if running in an interactive terminal (TTY)."""
+    return ui_is_interactive()
 
 
 def _validate_api_key(api_key: str) -> bool:
@@ -126,20 +292,20 @@ def _validate_api_key(api_key: str) -> bool:
     import httpx
 
     try:
-        console.print("[dim]Verifying API key...[/dim]", end=" ")
+        console.print("[serix.muted]Verifying API key...[/]", end=" ")
         response = httpx.get(
             "https://api.openai.com/v1/models",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10.0,
         )
         if response.status_code == 200:
-            console.print("[green]✓[/green]")
+            console.print(f"[serix.ok]{SUCCESS}[/]")
             return True
         else:
-            console.print("[red]✗[/red]")
+            console.print(f"[serix.bad]{FAILURE}[/]")
             return False
     except Exception:
-        console.print("[red]✗[/red]")
+        console.print(f"[serix.bad]{FAILURE}[/]")
         return False
 
 
@@ -161,11 +327,11 @@ def _ensure_api_key() -> bool:
     if existing_key:
         if _validate_api_key(existing_key):
             return True
-        console.print("[yellow]⚠️  Existing API key is invalid or expired.[/yellow]")
+        console.print("[serix.warn]Existing API key is invalid or expired.[/]")
 
     # Interactive prompt
     if not existing_key:
-        console.print("\n[yellow]⚠️  OpenAI API Key not found.[/yellow]")
+        console.print("\n[serix.warn]OpenAI API Key not found.[/]")
     console.print("Serix needs a valid API key to run adversarial attacks.\n")
 
     api_key = typer.prompt(
@@ -173,12 +339,12 @@ def _ensure_api_key() -> bool:
     )
 
     if not api_key.startswith("sk-"):
-        console.print("[red]Invalid API key format (should start with sk-)[/red]")
+        render.error(console, "Invalid API key format (should start with sk-)")
         return False
 
     # Validate the new key
     if not _validate_api_key(api_key):
-        console.print("[red]API key validation failed. Please check your key.[/red]")
+        render.error(console, "API key validation failed. Please check your key.")
         return False
 
     # Save to .env
@@ -186,7 +352,7 @@ def _ensure_api_key() -> bool:
     with open(env_path, "a") as f:
         f.write(f"OPENAI_API_KEY={api_key}\n")
     os.environ["OPENAI_API_KEY"] = api_key
-    console.print("[green]✓[/green] API key saved to .env")
+    render.success(console, "API key saved to .env")
     return True
 
 
@@ -196,13 +362,9 @@ def _apply_monkey_patch() -> None:
 
 
 def _run_script(script_path: Path) -> None:
-    """Execute a Python script with Serix interception enabled.
-
-    Args:
-        script_path: Path to the Python script to execute
-    """
+    """Execute a Python script with Serix interception enabled."""
     if not script_path.exists():
-        console.print(f"[red]Error:[/red] Script not found: {script_path}")
+        render.error(console, f"Script not found: {script_path}")
         raise typer.Exit(1)
 
     # Apply monkey patch
@@ -223,7 +385,7 @@ def _run_script(script_path: Path) -> None:
     try:
         exec(compile(script_code, script_path, "exec"), script_globals)
     except Exception as e:
-        console.print(f"[red]Script error:[/red] {e}")
+        render.error(console, f"Script error: {e}")
         raise
 
 
@@ -262,9 +424,8 @@ def run(
     config = SerixConfig(mode=mode, fuzz=fuzz_config, verbose=verbose)
     set_serix_config(config)
 
-    console.print(
-        f"[bold violet]Serix[/bold violet] Running {script} in {mode.value} mode"
-    )
+    render.section_header(console, f"Running {script}")
+    render.kv(console, "Mode", mode.value)
     _run_script(script)
 
 
@@ -287,7 +448,7 @@ def record(
     session = RecordingSession(script_path=str(script))
     set_recording_session(session)
 
-    console.print(f"[bold violet]Serix[/bold violet] Recording {script}...")
+    render.section_header(console, f"Recording {script}")
 
     try:
         _run_script(script)
@@ -301,12 +462,12 @@ def record(
                 output = recordings_dir / f"{script.stem}_{timestamp}.json"
 
             save_recording(session, output)
-            console.print(
-                f"[green]✓[/green] Recorded {len(session.interactions)} "
-                f"interactions to {output}"
+            render.success(
+                console,
+                f"Recorded {len(session.interactions)} interactions to {output}",
             )
         else:
-            console.print("[yellow]⚠️  No interactions recorded[/yellow]")
+            render.warning(console, "No interactions recorded")
 
 
 @app.command()
@@ -322,7 +483,7 @@ def replay(
 ) -> None:
     """Replay a script using recorded API responses."""
     if not recording.exists():
-        console.print(f"[red]Error:[/red] Recording not found: {recording}")
+        render.error(console, f"Recording not found: {recording}")
         raise typer.Exit(1)
 
     config = SerixConfig(
@@ -336,13 +497,11 @@ def replay(
     session = load_recording(recording)
     set_recording_session(session)
 
-    console.print(
-        f"[bold violet]Serix[/bold violet] Replaying {script} with {len(session.interactions)} "
-        f"recorded interactions"
-    )
+    render.section_header(console, f"Replaying {script}")
+    render.kv(console, "Interactions", str(len(session.interactions)))
 
     _run_script(script)
-    console.print("[green]✓[/green] Replay complete")
+    render.success(console, "Replay complete")
 
 
 @app.command(hidden=True)  # Deprecated: hidden from --help
@@ -388,10 +547,10 @@ def attack(
     Configuration can be provided via serix.toml file or CLI arguments.
     CLI arguments override config file values.
     """
-    console.print(
-        "[yellow]Warning: 'serix attack' is deprecated. "
-        "Please use 'serix test --mode static' instead.[/yellow]\n"
+    render.warning(
+        console, "'serix attack' is deprecated. Use 'serix test --mode static' instead."
     )
+    console.print()
     from serix.core.client import get_original_openai_class
     from serix.core.config_loader import find_config_file, load_config
     from serix.fuzz.redteam import RedTeamEngine
@@ -404,7 +563,7 @@ def attack(
     file_config = load_config(config_path)
 
     if config_path:
-        console.print(f"[dim]Using config:[/dim] {config_path}")
+        render.muted(console, f"Using config: {config_path}")
 
     # Merge config with CLI args (CLI takes precedence)
     final_script = script or (
@@ -420,35 +579,32 @@ def attack(
 
     # Validate required fields
     if final_script is None:
-        console.print(
-            "[red]Error:[/red] Script is required. "
-            "Provide via argument or config file."
+        render.error(
+            console, "Script is required. Provide via argument or config file."
         )
         raise typer.Exit(1)
 
     if final_goal is None:
-        console.print(
-            "[red]Error:[/red] Goal is required. " "Provide via --goal or config file."
-        )
+        render.error(console, "Goal is required. Provide via --goal or config file.")
         raise typer.Exit(1)
 
     # Bail early if script doesn't exist or isn't a Python file
     final_script = Path(final_script)
     if not final_script.exists():
-        console.print(f"[red]Error:[/red] Script not found: {final_script}")
+        render.error(console, f"Script not found: {final_script}")
         raise typer.Exit(1)
 
     if not final_script.suffix == ".py":
-        console.print(f"[red]Error:[/red] Not a Python file: {final_script}")
+        render.error(console, f"Not a Python file: {final_script}")
         raise typer.Exit(1)
 
-    console.print(f"[bold violet]Serix[/bold violet] Attacking {final_script}")
-    console.print(f"[yellow]Goal:[/yellow] {final_goal}")
+    render.section_header(console, f"Attacking {final_script}")
+    render.kv(console, "Goal", final_goal)
 
     # Get the original OpenAI class (unpatched) for the attacker
     original_class = get_original_openai_class()
     if original_class is None:
-        console.print("[red]Error:[/red] Original OpenAI class not available")
+        render.error(console, "Original OpenAI class not available")
         raise typer.Exit(1)
 
     # Create red team engine with unpatched client
@@ -457,14 +613,14 @@ def attack(
     except Exception as e:
         error_msg = str(e).lower()
         if "api_key" in error_msg:
-            console.print("[red]Error:[/red] OpenAI API key not found\n")
-            console.print("Set your API key using one of these methods:\n")
+            render.error(console, "OpenAI API key not found")
+            console.print("\nSet your API key using one of these methods:\n")
             console.print("  1. Environment variable:")
-            console.print("     [green]export OPENAI_API_KEY=sk-...[/green]\n")
+            console.print("     [serix.ok]export OPENAI_API_KEY=sk-...[/]\n")
             console.print("  2. In your shell profile (~/.bashrc or ~/.zshrc)")
             console.print("\nGet your key at: https://platform.openai.com/api-keys")
         else:
-            console.print(f"[red]Error:[/red] Failed to initialize OpenAI client: {e}")
+            render.error(console, f"Failed to initialize OpenAI client: {e}")
         raise typer.Exit(1)
 
     engine = RedTeamEngine(
@@ -485,14 +641,12 @@ def attack(
     # Report results
     if results.successful_attacks:
         console.print(
-            f"\n[red]⚠️  {len(results.successful_attacks)} successful attacks![/red]"
+            f"\n[serix.bad]{len(results.successful_attacks)} successful attacks![/]"
         )
         for atk in results.successful_attacks:
-            console.print(f"  • {atk.strategy}: {atk.payload[:100]}...")
+            console.print(f"  {BULLET} {atk.strategy}: {atk.payload[:100]}...")
     else:
-        console.print(
-            f"\n[green]✓[/green] Agent defended against {final_max_attempts} attacks"
-        )
+        render.success(console, f"Agent defended against {final_max_attempts} attacks")
 
     # Save attacks for regression testing
     if not no_save:
@@ -538,7 +692,8 @@ def attack(
             output_path=final_report,
             judge_model=final_judge_model,
         )
-        console.print(f"\n[cyan]Report:[/cyan] {report_path}")
+        console.print()
+        render.kv(console, "Report", str(report_path))
 
 
 @app.command()
@@ -683,6 +838,16 @@ def test(
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompts (for CI/CD)"),
     ] = False,
+    help_flag: Annotated[
+        bool,
+        typer.Option(
+            "--help",
+            "-h",
+            callback=_test_help_callback,
+            is_eager=True,
+            help="Show help and exit.",
+        ),
+    ] = False,
 ) -> None:
     """Test an agent with security scenarios.
 
@@ -720,7 +885,7 @@ def test(
     file_config = load_config(config_path)
 
     if config_path and config:  # Only show if explicitly provided
-        console.print(f"[dim]Using config:[/dim] {config_path}")
+        render.muted(console, f"Using config: {config_path}")
 
     # Merge config with CLI args (CLI takes precedence)
     # Prefer target field, fall back to script for backward compat
@@ -765,12 +930,10 @@ def test(
 
     # Validate target
     if not final_target:
-        console.print(
-            "[red]Error:[/red] No target specified.\n\n"
-            "Either:\n"
-            "  1. Provide on command line: serix test my_agent.py:my_agent\n"
-            '  2. Add to config file: target = "my_agent.py:my_agent"'
-        )
+        render.error(console, "No target specified.")
+        console.print("\nEither:")
+        console.print("  1. Provide on command line: serix test my_agent.py:my_agent")
+        console.print('  2. Add to config file: target = "my_agent.py:my_agent"')
         raise typer.Exit(1)
 
     # Determine effective mode
@@ -795,9 +958,8 @@ def test(
 
     if final_target.startswith("http://") or final_target.startswith("https://"):
         # HTTP endpoint target
-        console.print(
-            f"[bold violet]Serix[/bold violet] Testing HTTP endpoint: {final_target}"
-        )
+        render.section_header(console, "Immune Check")
+        render.kv(console, "Target", f"HTTP {BULLET} {final_target}")
         parsed_headers = json.loads(headers) if headers else {}
         target_obj = HttpTarget(
             url=final_target,
@@ -810,9 +972,8 @@ def test(
     elif ":" in final_target:
         # Python function or class target
         file_path, name = final_target.rsplit(":", 1)
-        console.print(
-            f"[bold violet]Serix[/bold violet] Testing {name} from {file_path}"
-        )
+        render.section_header(console, "Immune Check")
+        render.kv(console, "Target", f"{file_path}:{name}")
 
         try:
             # Try loading as function first
@@ -839,26 +1000,24 @@ def test(
                     verbose=final_verbose,
                 )
         except Exception as e:
-            console.print(f"[red]Error loading target:[/red] {e}")
+            render.error(console, f"Loading target: {e}")
             raise typer.Exit(1)
     else:
-        console.print(
-            f"[red]Error:[/red] Invalid target format: '{final_target}'\n\n"
-            "Expected one of:\n"
-            "  - file.py:function_name (decorated function)\n"
-            "  - file.py:ClassName (Agent subclass)\n"
-            "  - http://... or https://... (HTTP endpoint)"
-        )
+        render.error(console, f"Invalid target format: '{final_target}'")
+        console.print("\nExpected one of:")
+        console.print("  - file.py:function_name (decorated function)")
+        console.print("  - file.py:ClassName (Agent subclass)")
+        console.print("  - http://... or https://... (HTTP endpoint)")
         raise typer.Exit(1)
 
     # Display goal(s) info
     if len(goal_list) == 1:
-        console.print(f"[yellow]Goal:[/yellow] {goal_list[0]}")
+        render.kv(console, "Goal", f'"{goal_list[0]}"')
     else:
-        console.print(f"[yellow]Goals:[/yellow] {len(goal_list)} goals to test")
+        render.kv(console, "Goals", f"{len(goal_list)} goals to test")
         for i, g in enumerate(goal_list, 1):
             console.print(f"  {i}. {g[:60]}{'...' if len(g) > 60 else ''}")
-    console.print(f"[dim]Mode:[/dim] {effective_mode}")
+    render.kv(console, "Mode", f"{effective_mode} {BULLET} depth={depth}")
 
     # Show model config in verbose mode (once at startup, not per-turn)
     if final_verbose:
@@ -868,19 +1027,20 @@ def test(
         # Use CLI override for judge if provided, otherwise config/default
         effective_judge = judge_model or models.judge
         if effective_mode == "adaptive":
-            console.print(
-                f"[dim]Models: attacker={models.attacker}, "
-                f"critic={models.critic}, judge={effective_judge}[/dim]"
+            render.muted(
+                console,
+                f"Models: attacker={models.attacker}, "
+                f"critic={models.critic}, judge={effective_judge}",
             )
         else:
-            console.print(
-                f"[dim]Models: attacker={models.attacker}, judge={effective_judge}[/dim]"
+            render.muted(
+                console, f"Models: attacker={models.attacker}, judge={effective_judge}"
             )
 
     # Get the original OpenAI class (unpatched) for the attacker
     original_class = get_original_openai_class()
     if original_class is None:
-        console.print("[red]Error:[/red] Original OpenAI class not available")
+        render.error(console, "Original OpenAI class not available")
         raise typer.Exit(1)
 
     # Create red team engine
@@ -889,14 +1049,14 @@ def test(
     except Exception as e:
         error_msg = str(e).lower()
         if "api_key" in error_msg:
-            console.print("[red]Error:[/red] OpenAI API key not found\n")
-            console.print("Set your API key using one of these methods:\n")
+            render.error(console, "OpenAI API key not found")
+            console.print("\nSet your API key using one of these methods:\n")
             console.print("  1. Environment variable:")
-            console.print("     [green]export OPENAI_API_KEY=sk-...[/green]\n")
+            console.print("     [serix.ok]export OPENAI_API_KEY=sk-...[/]\n")
             console.print("  2. In your shell profile (~/.bashrc or ~/.zshrc)")
             console.print("\nGet your key at: https://platform.openai.com/api-keys")
         else:
-            console.print(f"[red]Error:[/red] Failed to initialize OpenAI client: {e}")
+            render.error(console, f"Failed to initialize OpenAI client: {e}")
         raise typer.Exit(1)
 
     engine = RedTeamEngine(
@@ -923,8 +1083,10 @@ def test(
             mutations.append("errors")
         if fuzz_config.enable_json_corruption:
             mutations.append("json")
-        console.print(
-            f"[yellow]Fuzzing:[/yellow] {', '.join(mutations)} @ {fuzz_config.mutation_probability:.0%}"
+        render.kv(
+            console,
+            "Fuzzing",
+            f"{', '.join(mutations)} @ {fuzz_config.mutation_probability:.0%}",
         )
 
     # Verify HTTP targets are reachable before wasting API calls
@@ -932,7 +1094,7 @@ def test(
         try:
             target_obj.verify_connectivity()
         except ConnectionError as e:
-            console.print(f"[red]Error:[/red] {e}")
+            render.error(console, str(e))
             console.print("\nMake sure your HTTP server is running.")
             raise typer.Exit(1)
 
@@ -949,11 +1111,12 @@ def test(
 
     estimated_calls = len(goal_list) * num_personas * depth
     if estimated_calls > 10 and not yes:
-        console.print("\n[yellow]Cost Warning[/yellow]")
+        console.print()
+        render.warning(console, "Cost Warning")
         console.print(
             f"   {len(goal_list)} goal(s) x {num_personas} persona(s) x {depth} turn(s)"
         )
-        console.print(f"   [bold]~{estimated_calls} API calls[/bold]\n")
+        console.print(f"   ~{estimated_calls} API calls\n")
 
         if _is_interactive():
             if not typer.confirm("Proceed with test?", default=True):
@@ -1033,7 +1196,7 @@ def test(
                     raise typer.Exit(1)
                 # With --yes: continue without prompting
     elif not no_immune:
-        console.print("[dim]No stored attacks for Immune Check[/dim]")
+        render.muted(console, "No stored attacks for Immune Check")
 
     # Track results per goal for multi-goal support
     from dataclasses import dataclass as dc
@@ -1060,9 +1223,9 @@ def test(
         if effective_mode == "adaptive":
             # Live UI mode only supports single goal
             if live and len(goal_list) > 1:
-                console.print(
-                    "[yellow]Note:[/yellow] Live UI mode only supports single goal. "
-                    f"Using first goal: {goal_list[0][:50]}..."
+                render.warning(
+                    console,
+                    f"Live UI mode only supports single goal. Using: {goal_list[0][:50]}...",
                 )
                 goal_list = [goal_list[0]]
 
@@ -1143,10 +1306,10 @@ def test(
                 )
             else:
                 # Non-live adaptive mode: loop through all goals
-                console.print(
-                    f"[dim]Using adaptive adversary with scenarios: {scenario_list}[/dim]"
+                render.muted(
+                    console, f"Using adaptive adversary with scenarios: {scenario_list}"
                 )
-                console.print(f"[dim]Max turns per persona: {depth}[/dim]")
+                render.muted(console, f"Max turns per persona: {depth}")
 
                 # Enable progress output in non-live mode
                 def progress_signal(turn: int, max_turns: int) -> None:
@@ -1162,9 +1325,9 @@ def test(
                     # Show goal progress for multi-goal
                     if len(goal_list) > 1:
                         console.print(
-                            f"\n[bold cyan]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/bold cyan]"
+                            f"\n[serix.label]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/]"
                         )
-                        console.print(f"[yellow]{current_goal}[/yellow]")
+                        console.print(f"[serix.warn]{current_goal}[/]")
 
                     adversary_result = engine.attack_with_adversary(
                         target=target_obj,
@@ -1204,28 +1367,31 @@ def test(
                     )
 
                     # Display per-goal result
-                    status_icon = (
-                        "[green]✓[/green]" if evaluation.passed else "[red]✗[/red]"
-                    )
-                    console.print(
-                        f"\n{status_icon} Goal {goal_idx}: "
-                        f"{'DEFENDED' if evaluation.passed else 'EXPLOITED'}"
+                    console.print()
+                    render.result_line(
+                        console,
+                        evaluation.passed,
+                        f"Goal {goal_idx}: {'DEFENDED' if evaluation.passed else 'EXPLOITED'}",
                     )
 
             # Display summary for multi-goal or single goal result
             if len(all_goal_results) > 1:
                 # Multi-goal summary
-                console.print("\n[cyan]━━━ Multi-Goal Summary ━━━[/cyan]")
+                console.print("\n[serix.label]━━━ Multi-Goal Summary ━━━[/]")
                 passed_count = sum(1 for r in all_goal_results if r.passed)
                 failed_count = len(all_goal_results) - passed_count
                 console.print(f"  Goals tested:  {len(all_goal_results)}")
-                console.print(f"  [green]Defended:[/green]    {passed_count}")
-                console.print(f"  [red]Exploited:[/red]   {failed_count}")
+                console.print(f"  [serix.ok]Defended:[/]    {passed_count}")
+                console.print(f"  [serix.bad]Exploited:[/]   {failed_count}")
 
                 # Show per-goal breakdown
-                console.print("\n[dim]Results per goal:[/dim]")
+                render.muted(console, "\nResults per goal:")
                 for i, result in enumerate(all_goal_results, 1):
-                    status = "[green]✓[/green]" if result.passed else "[red]✗[/red]"
+                    status = (
+                        f"[serix.ok]{SUCCESS}[/]"
+                        if result.passed
+                        else f"[serix.bad]{FAILURE}[/]"
+                    )
                     goal_preview = (
                         result.goal[:40] + "..."
                         if len(result.goal) > 40
@@ -1233,8 +1399,8 @@ def test(
                     )
                     console.print(f"  {i}. {status} {goal_preview}")
                     if not result.passed and result.persona_used:
-                        console.print(
-                            f"     [dim]Exploited by: {result.persona_used}[/dim]"
+                        render.muted(
+                            console, f"     Exploited by: {result.persona_used}"
                         )
 
                 # Use first failed goal for detailed display, or first if all passed
@@ -1258,12 +1424,12 @@ def test(
                 overall_passed = display_result.passed
 
             # Display security scores (for primary/displayed result)
-            console.print("\n[cyan]━━━ Security Evaluation ━━━[/cyan]")
-            status_color = "green" if overall_passed else "red"
+            console.print("\n[serix.label]━━━ Security Evaluation ━━━[/]")
+            status_style = "serix.ok" if overall_passed else "serix.bad"
             status_text = "PASSED" if overall_passed else "FAILED"
-            console.print(f"[{status_color}]Status: {status_text}[/{status_color}]")
+            console.print(f"[{status_style}]Status: {status_text}[/]")
 
-            console.print("\n[cyan]Scores:[/cyan]")
+            console.print("\n[serix.label]Scores:[/]")
             console.print(f"  Overall:        {evaluation.scores.overall}/100")
             console.print(f"  Safety:         {evaluation.scores.safety}/100")
             console.print(f"  Compliance:     {evaluation.scores.compliance}/100")
@@ -1275,28 +1441,28 @@ def test(
             # Display vulnerabilities if any
             if evaluation.vulnerabilities:
                 console.print(
-                    f"\n[red]Vulnerabilities Found ({len(evaluation.vulnerabilities)}):[/red]"
+                    f"\n[serix.bad]Vulnerabilities Found ({len(evaluation.vulnerabilities)}):[/]"
                 )
                 for vuln in evaluation.vulnerabilities:
-                    severity_color = {
-                        "critical": "red",
-                        "high": "yellow",
-                        "medium": "cyan",
-                        "low": "dim",
+                    severity_style = {
+                        "critical": "serix.bad",
+                        "high": "serix.warn",
+                        "medium": "serix.label",
+                        "low": "serix.muted",
                     }.get(vuln.severity, "white")
                     console.print(
-                        f"  [{severity_color}][{vuln.severity.upper()}][/{severity_color}] "
+                        f"  [{severity_style}][{vuln.severity.upper()}][/] "
                         f"{vuln.type}: {vuln.description}"
                     )
 
             # Display attack details
-            console.print("\n[dim]Attack Details:[/dim]")
-            console.print(f"  • Persona: {adversary_result.persona_used}")
-            console.print(f"  • Turns: {adversary_result.turns_taken}")
-            console.print(f"  • Confidence: {adversary_result.confidence}")
+            render.muted(console, "\nAttack Details:")
+            console.print(f"  {BULLET} Persona: {adversary_result.persona_used}")
+            console.print(f"  {BULLET} Turns: {adversary_result.turns_taken}")
+            console.print(f"  {BULLET} Confidence: {adversary_result.confidence}")
             if adversary_result.winning_payload:
                 preview = adversary_result.winning_payload[:80] + "..."
-                console.print(f"  • Winning payload: {preview}")
+                console.print(f"  {BULLET} Winning payload: {preview}")
 
             # Auto-save successful attacks for regression testing (all exploited goals)
             if not no_save:
@@ -1375,12 +1541,12 @@ def test(
                 )
 
                 # Display remediations if vulnerabilities found
-                console.print("\n[cyan]Recommended Remediations:[/cyan]")
+                console.print("\n[serix.label]Recommended Remediations:[/]")
                 for i, rem in enumerate(report_remediations[:3], 1):  # Top 3
-                    console.print(f"  {i}. [bold]{rem.title}[/bold]")
+                    console.print(f"  {i}. {rem.title}")
                     # Show first line of description
                     first_line = rem.description.strip().split("\n")[0]
-                    console.print(f"     {first_line}")
+                    render.muted(console, f"     {first_line}")
 
             # Generate HTML report if requested
             if final_report:
@@ -1413,7 +1579,8 @@ def test(
                     remediations=report_remediations,
                     goal_results=report_goal_results,
                 )
-                console.print(f"\n[cyan]HTML Report:[/cyan] {report_path}")
+                console.print()
+                render.kv(console, "HTML Report", str(report_path))
 
             # Generate JSON report if requested
             if json_report:
@@ -1432,16 +1599,14 @@ def test(
                     test_duration_seconds=test_duration,
                     fuzz_settings=config_snapshot.get("fuzz_settings"),
                 )
-                console.print(f"[cyan]JSON Report:[/cyan] {json_path}")
+                render.kv(console, "JSON Report", str(json_path))
 
             # Write GitHub outputs if requested
             if github:
                 if write_github_output(evaluation, final_target):
-                    console.print("[dim]GitHub outputs written[/dim]")
+                    render.muted(console, "GitHub outputs written")
                 else:
-                    console.print(
-                        "[yellow]Note: Not running in GitHub Actions environment[/yellow]"
-                    )
+                    render.warning(console, "Not running in GitHub Actions environment")
 
             # Exit with appropriate code (fail if ANY goal was exploited)
             if not overall_passed:
@@ -1455,9 +1620,9 @@ def test(
             # Show goal progress for multi-goal
             if len(goal_list) > 1:
                 console.print(
-                    f"\n[bold cyan]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/bold cyan]"
+                    f"\n[serix.label]━━━ Goal {goal_idx}/{len(goal_list)} ━━━[/]"
                 )
-                console.print(f"[yellow]{current_goal}[/yellow]")
+                console.print(f"[serix.warn]{current_goal}[/]")
 
             results = engine.attack_target(
                 target=target_obj,
@@ -1468,14 +1633,16 @@ def test(
 
             # Show per-goal result
             if results.successful_attacks:
-                console.print(
-                    f"[red]✗[/red] Goal {goal_idx}: EXPLOITED "
-                    f"({len(results.successful_attacks)} attacks succeeded)"
+                render.result_line(
+                    console,
+                    False,
+                    f"Goal {goal_idx}: EXPLOITED ({len(results.successful_attacks)} attacks succeeded)",
                 )
             else:
-                console.print(
-                    f"[green]✓[/green] Goal {goal_idx}: DEFENDED "
-                    f"(all {results.total_attempts} attacks blocked)"
+                render.result_line(
+                    console,
+                    True,
+                    f"Goal {goal_idx}: DEFENDED (all {results.total_attempts} attacks blocked)",
                 )
     finally:
         target_obj.teardown()
@@ -1485,24 +1652,24 @@ def test(
 
     if len(all_static_results) > 1:
         # Multi-goal summary
-        console.print("\n[cyan]━━━ Multi-Goal Summary ━━━[/cyan]")
+        console.print("\n[serix.label]━━━ Multi-Goal Summary ━━━[/]")
         goals_exploited = sum(1 for _, r in all_static_results if r.successful_attacks)
         goals_defended = len(all_static_results) - goals_exploited
         console.print(f"  Goals tested:  {len(all_static_results)}")
-        console.print(f"  [green]Defended:[/green]    {goals_defended}")
-        console.print(f"  [red]Exploited:[/red]   {goals_exploited}")
+        console.print(f"  [serix.ok]Defended:[/]    {goals_defended}")
+        console.print(f"  [serix.bad]Exploited:[/]   {goals_exploited}")
 
     if total_exploited > 0:
-        console.print(f"\n[red]⚠️  {total_exploited} vulnerabilities found![/red]")
-        for goal, results in all_static_results:
+        console.print(f"\n[serix.bad]{total_exploited} vulnerabilities found![/]")
+        for goal_item, results in all_static_results:
             for atk in results.successful_attacks:
-                goal_prefix = f"[{goal[:20]}...] " if len(goal_list) > 1 else ""
-                console.print(f"  • {goal_prefix}{atk.strategy}: {atk.payload[:60]}...")
+                goal_prefix = f"[{goal_item[:20]}...] " if len(goal_list) > 1 else ""
+                console.print(
+                    f"  {BULLET} {goal_prefix}{atk.strategy}: {atk.payload[:60]}..."
+                )
     else:
         total_attacks = sum(r.total_attempts for _, r in all_static_results)
-        console.print(
-            f"\n[green]✓[/green] Agent defended against {total_attacks} attacks"
-        )
+        render.success(console, f"Agent defended against {total_attacks} attacks")
 
     # Save attacks for regression testing
     if not no_save:
@@ -1555,7 +1722,8 @@ def test(
             output_path=final_report,
             judge_model=judge_model,
         )
-        console.print(f"\n[cyan]Report:[/cyan] {report_path}")
+        console.print()
+        render.kv(console, "Report", str(report_path))
 
     # Exit with code 1 if any goal was exploited
     if total_exploited > 0:
@@ -1572,9 +1740,8 @@ def init(
     config_path = Path("serix.toml")
 
     if config_path.exists() and not force:
-        console.print(
-            f"[yellow]Warning:[/yellow] {config_path} already exists. "
-            "Use --force to overwrite."
+        render.warning(
+            console, f"{config_path} already exists. Use --force to overwrite."
         )
         raise typer.Exit(1)
 
@@ -1616,10 +1783,10 @@ verbose = false                # Enable verbose output
 """
 
     config_path.write_text(default_config)
-    console.print(f"[green]✓[/green] Created {config_path}")
-    console.print("\n[dim]Next steps:[/dim]")
+    render.success(console, f"Created {config_path}")
+    render.muted(console, "\nNext steps:")
     console.print("  1. Edit serix.toml to set your target script and attack goal")
-    console.print("  2. Run [cyan]serix attack[/cyan] to start testing")
+    console.print("  2. Run [serix.label]serix test[/] to start testing")
 
 
 @app.command()
@@ -1661,10 +1828,11 @@ def demo(
 
     report_path = report or Path("serix-demo-report.html")
 
-    console.print("[bold violet]Serix Demo[/bold violet] - Testing a vulnerable agent")
-    console.print("[dim]Target:[/dim] golden_victim (bundled)")
-    console.print("[dim]Scenario:[/dim] jailbreak (Grandma exploit)")
-    console.print("[dim]Goal:[/dim] Reveal the API key\n")
+    render.section_header(console, "Demo")
+    render.kv(console, "Target", "golden_victim (bundled)")
+    render.kv(console, "Scenario", "jailbreak (Grandma exploit)")
+    render.kv(console, "Goal", '"Reveal the API key"')
+    console.print()
 
     # Build command
     cmd = [

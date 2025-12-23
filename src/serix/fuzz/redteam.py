@@ -8,16 +8,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from openai import OpenAI
-from rich.console import Console
 
 from serix.core.config_loader import get_models
+from serix.ui import FAILURE, SUCCESS, get_console
 
 if TYPE_CHECKING:
     from serix.core.target import Target
     from serix.fuzz.adversary import AdversaryResult
     from serix.heal.types import HealingResult
 
-console = Console()
+console = get_console()
 
 
 @dataclass
@@ -347,18 +347,18 @@ The attack should be a single message that could be sent to an AI assistant.""",
                 strategy_name = f"dynamic_{i}"
 
             # Show attack header
-            console.print(f"\n[cyan]{'━' * 50}[/cyan]")
-            console.print(f"[cyan]Attack #{i+1}: {strategy_name}[/cyan]")
-            console.print(f"[cyan]{'━' * 50}[/cyan]")
+            console.print(f"\n[serix.label]{'━' * 50}[/]")
+            console.print(f"[serix.label]Attack #{i+1}: {strategy_name}[/]")
+            console.print(f"[serix.label]{'━' * 50}[/]")
             payload_preview = payload[:100] + "..." if len(payload) > 100 else payload
-            console.print(f"[dim]Payload:[/dim] {payload_preview}")
+            console.print(f"[serix.muted]Payload:[/] {payload_preview}")
 
             # Run the attack
-            console.print("[dim]Executing...[/dim]")
+            console.print("[serix.muted]Executing...[/]")
             response = self._run_attack_on_script(script_path, payload)
 
             # Judge the result with impartial evaluator
-            console.print(f"[dim]Judging with {self.judge_model}...[/dim]")
+            console.print(f"[serix.muted]Judging with {self.judge_model}...[/]")
             verdict = self._judge_response(goal, payload, response)
 
             attack = Attack(
@@ -373,15 +373,17 @@ The attack should be a single message that could be sent to an AI assistant.""",
             if verdict.success:
                 # Print dramatic vulnerability alert
                 print_critical_vulnerability(attack)
-                console.print(f"[dim]Confidence: {verdict.confidence.upper()}[/dim]")
+                console.print(
+                    f"[serix.muted]Confidence: {verdict.confidence.upper()}[/]"
+                )
                 if i + 1 < max_attempts:
                     console.print(
-                        f"[dim]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/dim]"
+                        f"[serix.muted]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/]"
                     )
                 break  # Stop on first success for maximum drama
             else:
                 console.print(
-                    f"[green]DEFENDED[/green] [dim]({verdict.confidence})[/dim]"
+                    f"[serix.ok]{SUCCESS} DEFENDED[/] [serix.muted]({verdict.confidence})[/]"
                 )
 
         return results
@@ -418,12 +420,14 @@ The attack should be a single message that could be sent to an AI assistant.""",
 
             # Verbose mode: detailed output (matches adaptive style)
             if self.verbose:
-                console.print(f"\n[cyan]━━━ Attack #{i+1}: {strategy_name} ━━━[/cyan]")
+                console.print(
+                    f"\n[serix.label]━━━ Attack #{i+1}: {strategy_name} ━━━[/]"
+                )
                 payload_preview = (
                     payload[:100] + "..." if len(payload) > 100 else payload
                 )
-                console.print(f"[dim]Payload:[/dim] {payload_preview}")
-                console.print("[dim]Sending to target...[/dim]")
+                console.print(f"[serix.muted]Payload:[/] {payload_preview}")
+                console.print("[serix.muted]Sending to target...[/]")
 
             # Run the attack using Target.send()
             target_response = target.send(payload)
@@ -433,9 +437,9 @@ The attack should be a single message that could be sent to an AI assistant.""",
             if self.verbose:
                 if target_response.latency_ms > 0:
                     console.print(
-                        f"[dim]Latency: {target_response.latency_ms:.0f}ms[/dim]"
+                        f"[serix.muted]Latency: {target_response.latency_ms:.0f}ms[/]"
                     )
-                console.print("[dim]Judging...[/dim]")
+                console.print("[serix.muted]Judging...[/]")
 
             # Judge the result with impartial evaluator
             verdict = self._judge_response(goal, payload, response)
@@ -443,11 +447,11 @@ The attack should be a single message that could be sent to an AI assistant.""",
             # Verbose: show verdict (matches adaptive style)
             if self.verbose:
                 status = (
-                    "[red]EXPLOITED[/red]"
+                    f"[serix.bad]{FAILURE} EXPLOITED[/]"
                     if verdict.success
-                    else "[green]DEFENDED[/green]"
+                    else f"[serix.ok]{SUCCESS} DEFENDED[/]"
                 )
-                console.print(f"{status} [dim]({verdict.confidence})[/dim]")
+                console.print(f"{status} [serix.muted]({verdict.confidence})[/]")
 
             attack = Attack(
                 strategy=strategy_name,
@@ -459,19 +463,19 @@ The attack should be a single message that could be sent to an AI assistant.""",
             results.attacks.append(attack)
 
             # Output result in unified [X/Y] format
-            status_icon = "✓" if verdict.success else "✗"
+            status_icon = SUCCESS if verdict.success else FAILURE
             status_text = "exploited" if verdict.success else "defended"
-            status_color = "red" if verdict.success else "green"
+            status_style = "serix.bad" if verdict.success else "serix.ok"
 
             console.print(
-                f"[dim][{i+1}/{max_attempts}][/dim] {strategy_name}: "
-                f"[{status_color}]{status_icon} {status_text}[/{status_color}]"
+                f"[serix.muted][{i+1}/{max_attempts}][/] {strategy_name}: "
+                f"[{status_style}]{status_icon} {status_text}[/]"
             )
 
             if verdict.success:
                 if i + 1 < max_attempts:
                     console.print(
-                        f"[dim]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/dim]"
+                        f"[serix.muted]Stopping early: vulnerability found at [{i+1}/{max_attempts}][/]"
                     )
                 break  # Stop on first success
 
@@ -600,8 +604,8 @@ The attack should be a single message that could be sent to an AI assistant.""",
             self._generate_healing(result, system_prompt)
         elif result.success and not system_prompt:
             console.print(
-                "[yellow]Fix generation disabled: No system_prompt provided. "
-                "Add system_prompt to @serix.scan() to enable fix suggestions.[/yellow]"
+                "[serix.warn]Fix generation disabled: No system_prompt provided. "
+                "Add system_prompt to @serix.scan() to enable fix suggestions.[/]"
             )
 
         return result
@@ -635,7 +639,7 @@ The attack should be a single message that could be sent to an AI assistant.""",
 
         # Generate healing with spinner for UX
         with console.status(
-            "[bold cyan]Generating fix suggestions...[/bold cyan]",
+            "[serix.label]Generating fix suggestions...[/]",
             spinner="dots",
         ):
             engine = HealingEngine(llm_client=self.client)

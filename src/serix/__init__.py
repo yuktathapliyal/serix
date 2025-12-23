@@ -29,7 +29,7 @@ from serix.eval import (
 from serix.fuzz.redteam import Attack, AttackResults, RedTeamEngine
 from serix.sdk.decorator import Agent, scan
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __all__ = [
     # SDK (clean user interface)
     "scan",

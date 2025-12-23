@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
@@ -13,28 +12,22 @@ from rich.tree import Tree
 from serix.core.types import RecordingSession
 from serix.fuzz.engine import FuzzResult
 from serix.fuzz.redteam import Attack, AttackResults
+from serix.ui import FAILURE, SUCCESS, get_console
 
 if TYPE_CHECKING:
     from serix.heal.types import HealingResult
 
-console = Console()
+console = get_console()
 
 
 def get_severity_color(severity: str) -> str:
-    """Get Rich color for severity level.
-
-    Args:
-        severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO)
-
-    Returns:
-        Rich color string for the severity
-    """
+    """Get Rich color for severity level."""
     severity_colors = {
-        "CRITICAL": "bold red",
-        "HIGH": "bold orange1",
-        "MEDIUM": "bold yellow",
-        "LOW": "bold blue",
-        "INFO": "dim",
+        "CRITICAL": "serix.bad",
+        "HIGH": "serix.warn",
+        "MEDIUM": "serix.label",
+        "LOW": "serix.muted",
+        "INFO": "serix.muted",
     }
     return severity_colors.get(severity.upper(), "white")
 
@@ -118,29 +111,29 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
     # Build the panel content with MCP-aware formatting
     if is_mcp:
         panel_lines = [
-            "[bold red]SERIX SANDBOX: BLOCKED MCP ACTION[/bold red]",
+            "[serix.bad]SERIX SANDBOX: BLOCKED MCP ACTION[/]",
             "",
-            f"[bold yellow]Server:[/bold yellow] {server}",
-            f"[bold yellow]Tool:[/bold yellow] {parsed_tool}",
+            f"[serix.warn]Server:[/] {server}",
+            f"[serix.warn]Tool:[/] {parsed_tool}",
         ]
     else:
         panel_lines = [
-            "[bold red]SERIX SANDBOX: BLOCKED DESTRUCTIVE ACTION[/bold red]",
+            "[serix.bad]SERIX SANDBOX: BLOCKED DESTRUCTIVE ACTION[/]",
             "",
-            f"[bold yellow]Tool:[/bold yellow] {tool_name}",
+            f"[serix.warn]Tool:[/] {tool_name}",
         ]
 
     if args_str:
-        panel_lines.append("[bold yellow]Args:[/bold yellow]")
+        panel_lines.append("[serix.warn]Args:[/]")
         if len(args_str) > 200:
             args_str = args_str[:200] + "..."
-        panel_lines.append(f"[dim]{args_str}[/dim]")
+        panel_lines.append(f"[serix.muted]{args_str}[/]")
 
     panel_lines.extend(
         [
             "",
-            "[green]This action was intercepted by Serix.[/green]",
-            "[green]No side effects occurred.[/green]",
+            f"[serix.ok]{SUCCESS} This action was intercepted by Serix.[/]",
+            f"[serix.ok]{SUCCESS} No side effects occurred.[/]",
         ]
     )
 
@@ -148,7 +141,7 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
     console.print(
         Panel(
             "\n".join(panel_lines),
-            title="[bold red]SANDBOX INTERCEPT[/bold red]",
+            title="[serix.bad]SANDBOX INTERCEPT[/]",
             border_style="red",
             padding=(1, 2),
         )
@@ -158,26 +151,18 @@ def log_blocked_action(tool_name: str, args: dict | None = None) -> None:
 
 def print_banner() -> None:
     """Print Serix banner to console."""
-    banner = """
-[bold cyan]  ____            _
- / ___|  ___ _ __(_)_  __
- \\___ \\ / _ \\ '__| \\ \\/ /
-  ___) |  __/ |  | |>  <
- |____/ \\___|_|  |_/_/\\_\\[/bold cyan]
+    from serix import __version__
+    from serix.ui import render
 
-[dim]AI Agent Testing Framework[/dim]
-"""
-    console.print(banner)
+    render.banner(console, __version__)
 
 
 def print_recording_summary(session: RecordingSession) -> None:
-    """Print a summary of recorded interactions.
-
-    Args:
-        session: The recording session to summarize
-    """
-    table = Table(title="Recording Summary", show_header=True, header_style="bold cyan")
-    table.add_column("#", style="dim", width=4)
+    """Print a summary of recorded interactions."""
+    table = Table(
+        title="Recording Summary", show_header=True, header_style="serix.label"
+    )
+    table.add_column("#", style="serix.muted", width=4)
     table.add_column("Model", width=20)
     table.add_column("Messages", width=10)
     table.add_column("Latency", width=12)
@@ -198,42 +183,33 @@ def print_recording_summary(session: RecordingSession) -> None:
 
     console.print(table)
     console.print(
-        f"\n[green]Total:[/green] {len(session.interactions)} interactions recorded"
+        f"\n[serix.ok]{SUCCESS}[/] {len(session.interactions)} interactions recorded"
     )
 
 
 def print_fuzz_result(result: FuzzResult, index: int) -> None:
-    """Print result of a single fuzz test.
-
-    Args:
-        result: The fuzz test result
-        index: Test index for display
-    """
+    """Print result of a single fuzz test."""
     if result.error_raised:
-        status = "[red]ERROR[/red]"
+        status = f"[serix.bad]{FAILURE} ERROR[/]"
         details = str(result.error_raised)
     elif result.mutations_applied:
-        status = "[yellow]MUTATED[/yellow]"
+        status = "[serix.warn]MUTATED[/]"
         details = ", ".join(result.mutations_applied)
     else:
-        status = "[green]CLEAN[/green]"
+        status = f"[serix.ok]{SUCCESS} CLEAN[/]"
         details = "No mutations applied"
 
     console.print(f"  [{index}] {status}: {details}")
 
 
 def print_fuzz_summary(results: list[FuzzResult]) -> None:
-    """Print summary of fuzzing results.
-
-    Args:
-        results: List of fuzz test results
-    """
+    """Print summary of fuzzing results."""
     total = len(results)
     mutated = sum(1 for r in results if r.mutations_applied)
     errors = sum(1 for r in results if r.error_raised)
     clean = total - mutated
 
-    table = Table(title="Fuzzing Summary", show_header=True, header_style="bold cyan")
+    table = Table(title="Fuzzing Summary", show_header=True, header_style="serix.label")
     table.add_column("Metric", width=20)
     table.add_column("Count", width=10)
     table.add_column("Percentage", width=15)
@@ -261,12 +237,7 @@ def print_fuzz_summary(results: list[FuzzResult]) -> None:
 def print_critical_vulnerability(
     attack: Attack, vulnerability_type: str = "jailbreak"
 ) -> None:
-    """Print dramatic vulnerability alert for demo with OWASP information.
-
-    Args:
-        attack: The successful attack to display
-        vulnerability_type: Type of vulnerability for OWASP lookup
-    """
+    """Print dramatic vulnerability alert for demo with OWASP information."""
     from serix.eval.classifier import get_owasp_info
 
     # Get OWASP info based on attack strategy/type
@@ -275,7 +246,7 @@ def print_critical_vulnerability(
     console.print()
     console.print(
         Panel(
-            "[bold white on red]  CRITICAL VULNERABILITY FOUND  [/bold white on red]",
+            "[serix.bad]CRITICAL VULNERABILITY FOUND[/]",
             border_style="red",
             padding=(1, 4),
         )
@@ -283,62 +254,54 @@ def print_critical_vulnerability(
     console.print()
 
     # Build vulnerability tree
-    vuln_tree = Tree("[bold red]VULNERABILITY DETAILS[/bold red]")
-    vuln_tree.add("[bold]Type:[/bold] Prompt Injection")
-    vuln_tree.add(f"[bold]Strategy:[/bold] {attack.strategy}")
+    vuln_tree = Tree("[serix.bad]VULNERABILITY DETAILS[/]")
+    vuln_tree.add("Type: Prompt Injection")
+    vuln_tree.add(f"Strategy: {attack.strategy}")
 
     # Add OWASP badge if available
     if owasp:
         severity_color = get_severity_color(owasp.severity)
         owasp_node = vuln_tree.add(
-            f"[bold]OWASP:[/bold] [{severity_color}][{owasp.code}] {owasp.name} ({owasp.severity})[/{severity_color}]"
+            f"OWASP: [{severity_color}][{owasp.code}] {owasp.name} ({owasp.severity})[/]"
         )
-        owasp_node.add(f"[dim]{owasp.description}[/dim]")
+        owasp_node.add(f"[serix.muted]{owasp.description}[/]")
 
     console.print(vuln_tree)
     console.print()
-    console.print("[bold red]Attack Payload:[/bold red]")
+    console.print("[serix.bad]Attack Payload:[/]")
     console.print(Panel(attack.payload, border_style="yellow"))
-    console.print("[bold red]Agent Response:[/bold red]")
+    console.print("[serix.bad]Agent Response:[/]")
     console.print(Panel(attack.response or "[No response]", border_style="red"))
 
 
 def print_attack_results(
     results: AttackResults, vulnerability_type: str = "jailbreak"
 ) -> None:
-    """Print red team attack results with OWASP classification.
-
-    Args:
-        results: Attack results to display
-        vulnerability_type: Type of vulnerability for OWASP lookup
-    """
+    """Print red team attack results with OWASP classification."""
     from serix.eval.classifier import get_owasp_info
 
     owasp = get_owasp_info(vulnerability_type)
 
     # Header with OWASP info
-    panel_content = f"[bold]Goal:[/bold] {results.goal}\n"
-    panel_content += f"[bold]Attempts:[/bold] {len(results.attacks)}\n"
-    panel_content += f"[bold]Successful:[/bold] {len(results.successful_attacks)}"
+    panel_content = f"Goal: {results.goal}\n"
+    panel_content += f"Attempts: {len(results.attacks)}\n"
+    panel_content += f"Successful: {len(results.successful_attacks)}"
 
     if owasp and results.successful_attacks:
         severity_color = get_severity_color(owasp.severity)
-        panel_content += (
-            f"\n[bold]OWASP:[/bold] [{severity_color}][{owasp.code}] "
-            f"{owasp.name}[/{severity_color}]"
-        )
+        panel_content += f"\nOWASP: [{severity_color}][{owasp.code}] {owasp.name}[/]"
 
     console.print(
         Panel(
             panel_content,
-            title="[bold red]Red Team Results[/bold red]",
+            title="[serix.bad]Red Team Results[/]",
             border_style="red" if results.successful_attacks else "green",
         )
     )
 
     # Detailed table with OWASP column
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("#", style="dim", width=4)
+    table = Table(show_header=True, header_style="serix.label")
+    table.add_column("#", style="serix.muted", width=4)
     table.add_column("Strategy", width=18)
     table.add_column("OWASP", width=8)
     table.add_column("Result", width=12)
@@ -346,10 +309,10 @@ def print_attack_results(
 
     for i, attack in enumerate(results.attacks):
         if attack.success:
-            result_str = "[bold red]EXPLOITED[/bold red]"
+            result_str = f"[serix.bad]{FAILURE} EXPLOITED[/]"
             owasp_code = owasp.code if owasp else "N/A"
         else:
-            result_str = "[green]DEFENDED[/green]"
+            result_str = f"[serix.ok]{SUCCESS} DEFENDED[/]"
             owasp_code = "-"
         payload_preview = (
             attack.payload[:32] + "..." if len(attack.payload) > 35 else attack.payload
@@ -364,14 +327,14 @@ def print_attack_results(
     # Final verdict with OWASP context
     if results.successful_attacks:
         verdict = (
-            f"\n[bold red]VULNERABLE:[/bold red] Agent was compromised by "
+            f"\n[serix.bad]VULNERABLE:[/] Agent was compromised by "
             f"{len(results.successful_attacks)} attack(s)"
         )
         if owasp:
-            verdict += f"\n[dim]Classification: {owasp.code} - {owasp.name}[/dim]"
+            verdict += f"\n[serix.muted]Classification: {owasp.code} - {owasp.name}[/]"
         console.print(verdict)
     else:
-        console.print("\n[bold green]SECURE:[/bold green] Agent resisted all attacks")
+        console.print(f"\n[serix.ok]{SUCCESS} SECURE:[/] Agent resisted all attacks")
 
 
 # Maximum lines to show in CLI diff (truncate if longer)
@@ -379,15 +342,11 @@ MAX_DIFF_LINES_CLI = 50
 
 
 def print_healing_result(healing: "HealingResult") -> None:
-    """Print healing result with diff and tool fixes.
-
-    Args:
-        healing: HealingResult from the Self-Healing engine
-    """
+    """Print healing result with diff and tool fixes."""
     console.print()
     console.print(
         Panel(
-            "[bold cyan]SELF-HEALING PROPOSAL[/bold cyan]",
+            "[serix.label]SELF-HEALING PROPOSAL[/]",
             border_style="cyan",
             padding=(0, 2),
         )
@@ -396,15 +355,15 @@ def print_healing_result(healing: "HealingResult") -> None:
     # Show confidence and OWASP code
     confidence_pct = int(healing.confidence * 100)
     console.print(
-        f"\n[dim]Confidence:[/dim] {confidence_pct}%  "
-        f"[dim]OWASP:[/dim] {healing.owasp_code}  "
-        f"[dim]Type:[/dim] {healing.vulnerability_type}"
+        f"\n[serix.muted]Confidence:[/] {confidence_pct}%  "
+        f"[serix.muted]OWASP:[/] {healing.owasp_code}  "
+        f"[serix.muted]Type:[/] {healing.vulnerability_type}"
     )
 
     # Text Fix (System Prompt Diff)
     if healing.text_fix:
-        console.print("\n[bold green]TEXT FIX (System Prompt):[/bold green]")
-        console.print(f"[dim]{healing.text_fix.explanation}[/dim]")
+        console.print("\n[serix.ok]TEXT FIX (System Prompt):[/]")
+        console.print(f"[serix.muted]{healing.text_fix.explanation}[/]")
 
         diff_text = healing.text_fix.diff
         diff_lines = diff_text.split("\n")
@@ -429,36 +388,34 @@ def print_healing_result(healing: "HealingResult") -> None:
             console.print(
                 Panel(
                     syntax,
-                    title="[bold]Unified Diff[/bold]",
+                    title="Unified Diff",
                     border_style="green",
                     padding=(0, 1),
                 )
             )
         else:
-            console.print("[dim]No diff generated[/dim]")
+            console.print("[serix.muted]No diff generated[/]")
 
     else:
-        console.print(
-            "\n[yellow]No text fix available (system_prompt required)[/yellow]"
-        )
+        console.print("\n[serix.warn]No text fix available (system_prompt required)[/]")
 
     # Tool Fixes (Policy Recommendations)
     if healing.tool_fixes:
-        console.print("\n[bold blue]TOOL FIXES (Policy):[/bold blue]")
+        console.print("\n[serix.label]TOOL FIXES (Policy):[/]")
 
-        tool_tree = Tree("[bold]Recommendations[/bold]")
+        tool_tree = Tree("Recommendations")
         for fix in healing.tool_fixes:
             # Color-code by severity
             if fix.severity == "required":
-                severity_badge = "[bold red][REQUIRED][/bold red]"
+                severity_badge = "[serix.bad][REQUIRED][/]"
             elif fix.severity == "recommended":
-                severity_badge = "[bold yellow][RECOMMENDED][/bold yellow]"
+                severity_badge = "[serix.warn][RECOMMENDED][/]"
             else:
-                severity_badge = "[dim][OPTIONAL][/dim]"
+                severity_badge = "[serix.muted][OPTIONAL][/]"
 
             node_text = f"{severity_badge} {fix.recommendation}"
             if fix.owasp_code:
-                node_text += f" [dim]({fix.owasp_code})[/dim]"
+                node_text += f" [serix.muted]({fix.owasp_code})[/]"
 
             tool_tree.add(node_text)
 
@@ -468,23 +425,19 @@ def print_healing_result(healing: "HealingResult") -> None:
 
 
 def print_healing_summary(healing: "HealingResult") -> None:
-    """Print a compact summary of healing result.
-
-    Args:
-        healing: HealingResult from the Self-Healing engine
-    """
+    """Print a compact summary of healing result."""
     if not healing:
         return
 
     console.print()
-    console.print("[cyan]Fix suggestions generated.[/cyan]", end=" ")
+    console.print("[serix.label]Fix suggestions generated.[/]", end=" ")
 
     fix_count = 0
     if healing.text_fix:
         fix_count += 1
     fix_count += len(healing.tool_fixes)
 
-    console.print(f"[dim]({fix_count} recommendations)[/dim]")
+    console.print(f"[serix.muted]({fix_count} recommendations)[/]")
 
 
 # Regression testing output functions
@@ -493,50 +446,38 @@ def print_healing_summary(healing: "HealingResult") -> None:
 def print_immune_check_start(
     count: int, total_stored: int | None = None, skipped: int | None = None
 ) -> None:
-    """Print the start of the Immune Check phase.
-
-    Args:
-        count: Number of attacks to replay (after filtering)
-        total_stored: Total stored attacks (before filtering)
-        skipped: Number of mitigated attacks skipped
-    """
+    """Print the start of the Immune Check phase."""
     console.print()
     if skipped and total_stored and skipped > 0:
         console.print(
-            f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} of {total_stored} "
+            f"[serix.label]Immune Check:[/] Replaying {count} of {total_stored} "
             f"stored attacks ({skipped} mitigated, skipped)..."
         )
     else:
         console.print(
-            f"[bold cyan]🛡️ Immune Check:[/bold cyan] Replaying {count} stored attack(s)..."
+            f"[serix.label]Immune Check:[/] Replaying {count} stored attack(s)..."
         )
 
 
 def print_immune_check_result(
     passed: int, total: int, planned: int | None = None
 ) -> None:
-    """Print the result of the Immune Check.
-
-    Args:
-        passed: Number of attacks defended
-        total: Total attacks actually checked
-        planned: Total attacks planned to check (for early stop detection)
-    """
+    """Print the result of the Immune Check."""
     if passed == total:
         console.print(
-            f"[green]✓ {passed}/{total} defended[/green] "
-            "[dim](previously vulnerable payloads)[/dim]"
+            f"[serix.ok]{SUCCESS} {passed}/{total} defended[/] "
+            "[serix.muted](previously vulnerable payloads)[/]"
         )
     else:
         failed = total - passed
         # Show if we stopped early due to fail_fast
         if planned and total < planned:
             console.print(
-                f"[red]✗ {failed}/{total} still vulnerable[/red] "
-                f"[dim](stopped early, {planned - total} not checked)[/dim]"
+                f"[serix.bad]{FAILURE} {failed}/{total} still vulnerable[/] "
+                f"[serix.muted](stopped early, {planned - total} not checked)[/]"
             )
         else:
-            console.print(f"[red]✗ {failed}/{total} still vulnerable[/red]")
+            console.print(f"[serix.bad]{FAILURE} {failed}/{total} still vulnerable[/]")
 
 
 def print_regression_failure(
@@ -544,17 +485,11 @@ def print_regression_failure(
     fail_fast: bool = True,
     will_prompt: bool = False,
 ) -> None:
-    """Print detailed regression failure information.
-
-    Args:
-        failed_attacks: List of StoredAttack objects that still succeed
-        fail_fast: Whether we stopped early due to fail-fast
-        will_prompt: If True, user will be prompted to continue (skip tip message)
-    """
+    """Print detailed regression failure information."""
     console.print()
     console.print(
         Panel(
-            "[bold red]REGRESSION DETECTED[/bold red]",
+            "[serix.bad]REGRESSION DETECTED[/]",
             border_style="red",
             padding=(0, 2),
         )
@@ -562,35 +497,31 @@ def print_regression_failure(
 
     for attack in failed_attacks[:3]:  # Show max 3
         console.print()
-        console.print(f"[bold yellow]Attack:[/bold yellow] {attack.id}")
+        console.print(f"[serix.warn]Attack:[/] {attack.id}")
         payload_preview = (
             attack.payload[:80] + "..." if len(attack.payload) > 80 else attack.payload
         )
-        console.print(f"[bold yellow]Payload:[/bold yellow] {payload_preview}")
-        console.print("[bold yellow]Status:[/bold yellow] [red]STILL VULNERABLE[/red]")
+        console.print(f"[serix.warn]Payload:[/] {payload_preview}")
+        console.print("[serix.warn]Status:[/] [serix.bad]STILL VULNERABLE[/]")
 
     if len(failed_attacks) > 3:
-        console.print(f"\n[dim]...and {len(failed_attacks) - 3} more[/dim]")
+        console.print(f"\n[serix.muted]...and {len(failed_attacks) - 3} more[/]")
 
     console.print()
 
     # Don't show tip if we're about to prompt the user
     if fail_fast and not will_prompt:
         console.print(
-            "[dim]Tip: This agent is still vulnerable to a previous attack.[/dim]"
+            "[serix.muted]Tip: This agent is still vulnerable to a previous attack.[/]"
         )
         console.print(
-            "[dim]     Run with --no-fail-fast to continue with new tests anyway.[/dim]"
+            "[serix.muted]     Run with --no-fail-fast to continue with new tests anyway.[/]"
         )
 
 
 def print_attacks_saved(count: int) -> None:
-    """Print confirmation of saved attacks.
-
-    Args:
-        count: Number of attacks saved
-    """
+    """Print confirmation of saved attacks."""
     if count > 0:
         console.print(
-            f"\n[dim]📦 Saved {count} new attack(s) to .serix/attacks.json[/dim]"
+            f"\n[serix.muted]Saved {count} new attack(s) to .serix/attacks.json[/]"
         )

@@ -54,11 +54,12 @@ class TestVersionAndHelp:
         assert "test" in result.output
 
     def test_help_flag(self) -> None:
-        """--help shows help."""
+        """--help shows custom Serix help."""
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        assert "Usage" in result.output
+        assert "SERIX" in result.output
+        assert "Commands:" in result.output
 
     def test_command_help(self) -> None:
         """Command --help shows command-specific help."""
@@ -252,17 +253,11 @@ class TestTestCommand:
 
         assert "fail-fast" in result.output.lower()
 
-    def test_test_no_save_flag(self) -> None:
-        """--no-save flag is documented."""
+    def test_test_config_flag(self) -> None:
+        """--config flag is documented."""
         result = runner.invoke(app, ["test", "--help"])
 
-        assert "no-save" in result.output.lower()
-
-    def test_test_verbose_flag(self) -> None:
-        """--verbose flag is documented."""
-        result = runner.invoke(app, ["test", "--help"])
-
-        assert "verbose" in result.output.lower()
+        assert "config" in result.output.lower()
 
 
 # =============================================================================
@@ -425,12 +420,6 @@ class TestHttpTargetParsing:
 
 class TestFlagCombinations:
     """Tests for various flag combinations."""
-
-    def test_verbose_short_flag(self) -> None:
-        """-v is short for --verbose."""
-        result = runner.invoke(app, ["test", "--help"])
-
-        assert "-v" in result.output
 
     def test_depth_short_flag(self) -> None:
         """-d is short for --depth."""
