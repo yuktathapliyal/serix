@@ -4,10 +4,23 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
+
+
+def get_serix_version() -> str:
+    """Get Serix version dynamically from package metadata.
+
+    Falls back to 'dev' if running from source without install.
+    """
+    try:
+        return version("serix")
+    except PackageNotFoundError:
+        return "dev"
 
 
 @dataclass
@@ -30,6 +43,12 @@ class StoredAttack:
         judge_reasoning: Latest reasoning from judge LLM
         agent_response: The agent's response to the attack
         strategy_id: Attack strategy identifier for deduplication (e.g., 'grandma_exploit')
+        attacker_model: LLM model used for generating attacks
+        judge_model: LLM model used for judging attack success
+        critic_model: LLM model used for critic feedback (if any)
+        config_snapshot: Test configuration at time of attack (depth, mode, fuzz_settings)
+        serix_version: Version of Serix that ran the test
+        test_duration_seconds: Total time spent running the test
     """
 
     id: str
@@ -43,7 +62,15 @@ class StoredAttack:
     current_status: str  # 'exploited' or 'defended'
     judge_reasoning: str
     agent_response: str
+    # v0.2.5 fields
     strategy_id: str = "unknown"
+    # v0.2.6 metadata fields
+    attacker_model: str = "unknown"
+    judge_model: str = "unknown"
+    critic_model: str = "unknown"
+    config_snapshot: dict[str, Any] = field(default_factory=dict)
+    serix_version: str = "unknown"
+    test_duration_seconds: float = 0.0
 
     @classmethod
     def create(
@@ -55,6 +82,13 @@ class StoredAttack:
         owasp_code: str = "LLM01",
         judge_reasoning: str = "",
         strategy_id: str = "unknown",
+        # v0.2.6 metadata parameters
+        attacker_model: str = "unknown",
+        judge_model: str = "unknown",
+        critic_model: str = "unknown",
+        config_snapshot: dict[str, Any] | None = None,
+        serix_version: str | None = None,
+        test_duration_seconds: float = 0.0,
     ) -> "StoredAttack":
         """Create a new StoredAttack with auto-generated id and timestamps.
 
@@ -66,6 +100,12 @@ class StoredAttack:
             owasp_code: OWASP classification (default: LLM01)
             judge_reasoning: Latest reasoning from judge LLM
             strategy_id: Attack strategy for deduplication (e.g., 'grandma_exploit')
+            attacker_model: LLM model used for generating attacks
+            judge_model: LLM model used for judging attack success
+            critic_model: LLM model used for critic feedback
+            config_snapshot: Test configuration (depth, mode, fuzz_settings)
+            serix_version: Version of Serix (auto-detected if None)
+            test_duration_seconds: Total test duration in seconds
 
         Returns:
             StoredAttack instance ready for storage
@@ -84,6 +124,13 @@ class StoredAttack:
             judge_reasoning=judge_reasoning,
             agent_response=agent_response,
             strategy_id=strategy_id,
+            # v0.2.6 metadata
+            attacker_model=attacker_model,
+            judge_model=judge_model,
+            critic_model=critic_model,
+            config_snapshot=config_snapshot or {},
+            serix_version=serix_version or get_serix_version(),
+            test_duration_seconds=test_duration_seconds,
         )
 
 
@@ -137,8 +184,9 @@ class AttackStore:
     def load_all(self, skip_mitigated: bool = False) -> list[StoredAttack]:
         """Load all stored attacks with automatic schema migration.
 
-        Migrates legacy attacks (pre-v0.2.5) to new schema on load.
-        Legacy fields: timestamp → first_exploited_at, adds current_status etc.
+        Migrates legacy attacks through the migration chain:
+        - v0.2.0 → v0.2.5: timestamp → first_exploited_at, adds current_status
+        - v0.2.5 → v0.2.6: adds attacker_model, judge_model, config_snapshot, etc.
 
         Args:
             skip_mitigated: If True, only return attacks with status 'exploited'
@@ -157,10 +205,21 @@ class AttackStore:
             needs_migration = False
 
             for item in data:
-                # Migrate legacy schema if needed
+                # Skip non-dict items (malformed data)
+                if not isinstance(item, dict):
+                    continue
+
+                # Migration chain: v0.2.0 → v0.2.5 → v0.2.6
+
+                # Step 1: v0.2.0 → v0.2.5 (legacy timestamp migration)
                 if "timestamp" in item and "first_exploited_at" not in item:
                     needs_migration = True
                     item = self._migrate_legacy(item)
+
+                # Step 2: v0.2.5 → v0.2.6 (metadata fields)
+                if "serix_version" not in item:
+                    needs_migration = True
+                    item = self._migrate_v025_to_v026(item)
 
                 attacks.append(StoredAttack(**item))
 
@@ -177,9 +236,13 @@ class AttackStore:
             return []
 
     def _migrate_legacy(self, item: dict) -> dict:
-        """Migrate a legacy attack record to new schema."""
+        """Migrate a v0.2.0 attack record to current schema.
+
+        Handles the full migration from v0.2.0 → current (v0.2.6+).
+        """
         timestamp = item.pop("timestamp", datetime.now().isoformat())
         return {
+            # v0.2.0 → v0.2.5 fields
             "id": item.get("id", str(uuid4())[:8]),
             "payload": item.get("payload", ""),
             "payload_hash": item.get("payload_hash", ""),
@@ -192,7 +255,29 @@ class AttackStore:
             "judge_reasoning": "",
             "agent_response": item.get("agent_response", ""),
             "strategy_id": item.get("strategy_id", "unknown"),
+            # v0.2.6 metadata fields
+            "attacker_model": item.get("attacker_model", "unknown"),
+            "judge_model": item.get("judge_model", "unknown"),
+            "critic_model": item.get("critic_model", "unknown"),
+            "config_snapshot": item.get("config_snapshot", {}),
+            "serix_version": "pre-0.2.6",  # Mark as legacy
+            "test_duration_seconds": item.get("test_duration_seconds", 0.0),
         }
+
+    def _migrate_v025_to_v026(self, item: dict) -> dict:
+        """Migrate a v0.2.5 attack record to v0.2.6 schema.
+
+        Adds the new metadata fields introduced in v0.2.6.
+        Preserves all existing v0.2.5 fields.
+        """
+        # Add new v0.2.6 fields with defaults
+        item.setdefault("attacker_model", "unknown")
+        item.setdefault("judge_model", "unknown")
+        item.setdefault("critic_model", "unknown")
+        item.setdefault("config_snapshot", {})
+        item.setdefault("serix_version", "pre-0.2.6")
+        item.setdefault("test_duration_seconds", 0.0)
+        return item
 
     def load_by_type(self, vuln_type: str) -> list[StoredAttack]:
         """Load attacks filtered by vulnerability type.

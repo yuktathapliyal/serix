@@ -103,6 +103,14 @@ class HTMLReportData:
 
     healing: HealingReportData | None = None
 
+    # v0.2.6 test configuration metadata
+    attacker_model: str | None = None
+    critic_model: str | None = None
+    serix_version: str | None = None
+    test_duration_seconds: float | None = None
+    depth: int | None = None
+    mode: str | None = None  # "static" or "adaptive"
+
 
 def create_report_data(
     results: AttackResults,
@@ -318,6 +326,15 @@ class EvaluationReportData:
 
     # Report type indicator (for template)
     is_evaluation_report: bool = True
+
+    # v0.2.6 test configuration metadata
+    attacker_model: str | None = None
+    judge_model: str | None = None
+    critic_model: str | None = None
+    serix_version: str | None = None
+    test_duration_seconds: float | None = None
+    depth: int | None = None
+    mode: str | None = None  # "static" or "adaptive"
 
 
 def get_score_color(score: int) -> str:

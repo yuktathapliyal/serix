@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 if TYPE_CHECKING:
     from serix.eval import EvaluationResult
@@ -45,6 +46,47 @@ def _version_callback(value: bool) -> None:
 
         typer.echo(f"serix {__version__}")
         raise typer.Exit()
+
+
+def _build_config_snapshot(
+    depth: int,
+    mode: str,
+    fuzz_enabled: bool = False,
+    fuzz_latency: bool = False,
+    fuzz_errors: bool = False,
+    fuzz_json: bool = False,
+    mutation_probability: float = 0.3,
+) -> dict[str, Any]:
+    """Build config_snapshot dict for StoredAttack metadata.
+
+    Args:
+        depth: Test depth (max attempts)
+        mode: Execution mode ('adaptive' or 'static')
+        fuzz_enabled: Whether fuzzing is enabled
+        fuzz_latency: Whether latency mutation is enabled
+        fuzz_errors: Whether error mutation is enabled
+        fuzz_json: Whether JSON corruption is enabled
+        mutation_probability: Probability of applying mutations
+
+    Returns:
+        Nested config_snapshot dictionary
+    """
+    snapshot: dict[str, Any] = {
+        "depth": depth,
+        "mode": mode,
+    }
+
+    # Only include fuzz_settings if fuzzing is enabled
+    if fuzz_enabled:
+        snapshot["fuzz_settings"] = {
+            "enabled": True,
+            "latency": fuzz_latency,
+            "errors": fuzz_errors,
+            "json_corruption": fuzz_json,
+            "mutation_probability": mutation_probability,
+        }
+
+    return snapshot
 
 
 @app.callback()
@@ -353,7 +395,7 @@ def attack(
     from serix.core.client import get_original_openai_class
     from serix.core.config_loader import find_config_file, load_config
     from serix.fuzz.redteam import RedTeamEngine
-    from serix.regression.store import AttackStore, StoredAttack
+    from serix.regression.store import AttackStore, StoredAttack, get_serix_version
     from serix.report.console import print_attacks_saved
     from serix.report.html import generate_html_report
 
@@ -431,12 +473,14 @@ def attack(
         verbose=final_verbose,
     )
 
-    # Run attacks
+    # Run attacks with timing
+    test_start_time = time.time()
     results = engine.attack(
         script_path=final_script,
         goal=final_goal,
         max_attempts=final_max_attempts,
     )
+    test_duration = time.time() - test_start_time
 
     # Report results
     if results.successful_attacks:
@@ -458,6 +502,12 @@ def attack(
         # Determine which attacks to save
         attacks_to_save = results.attacks if save_all else results.successful_attacks
 
+        # Build config snapshot for metadata
+        config_snapshot = _build_config_snapshot(
+            depth=final_max_attempts,
+            mode="static",
+        )
+
         for atk in attacks_to_save:
             attack_to_store = StoredAttack.create(
                 goal=final_goal,
@@ -466,6 +516,13 @@ def attack(
                 agent_response=atk.response or "",
                 owasp_code="LLM01",
                 strategy_id=atk.strategy,
+                # v0.2.6 metadata
+                attacker_model="gpt-4o-mini",  # Default attacker model
+                judge_model=final_judge_model or "gpt-4o",
+                critic_model="gpt-4o-mini",  # Default critic model
+                config_snapshot=config_snapshot,
+                serix_version=get_serix_version(),
+                test_duration_seconds=test_duration,
             )
             if store.save(attack_to_store):
                 saved_count += 1
@@ -651,7 +708,7 @@ def test(
     from serix.core.target import DecoratorTarget, HttpTarget, Target
     from serix.eval import Evaluator, RemediationEngine
     from serix.fuzz.redteam import RedTeamEngine
-    from serix.regression.store import AttackStore, StoredAttack
+    from serix.regression.store import AttackStore, StoredAttack, get_serix_version
     from serix.report.console import print_attacks_saved
     from serix.report.github import write_github_output
     from serix.report.html import generate_evaluation_report, generate_html_report
@@ -993,6 +1050,11 @@ def test(
 
     all_goal_results: list[GoalTestResult] = []
 
+    # Track test duration for metadata
+    import time
+
+    test_start_time = time.time()
+
     try:
         # Use adversary loop for adaptive mode
         if effective_mode == "adaptive":
@@ -1006,8 +1068,6 @@ def test(
 
             if live:
                 # Live split-screen command center UI
-                import time
-
                 from serix.report.live_ui import LiveAttackUI
 
                 scenario_name = scenario_list[0] if scenario_list else "attack"
@@ -1240,6 +1300,22 @@ def test(
 
             # Auto-save successful attacks for regression testing (all exploited goals)
             if not no_save:
+                # Compute test duration and build config snapshot
+                test_duration = time.time() - test_start_time
+                config_snapshot = _build_config_snapshot(
+                    depth=depth,
+                    mode="adaptive",
+                    fuzz_enabled=fuzz_config is not None,
+                    fuzz_latency=fuzz_config.enable_latency if fuzz_config else False,
+                    fuzz_errors=fuzz_config.enable_errors if fuzz_config else False,
+                    fuzz_json=(
+                        fuzz_config.enable_json_corruption if fuzz_config else False
+                    ),
+                    mutation_probability=(
+                        fuzz_config.mutation_probability if fuzz_config else 0.3
+                    ),
+                )
+
                 saved_count = 0
                 for result in all_goal_results:
                     if (
@@ -1273,6 +1349,13 @@ def test(
                             ),
                             owasp_code=owasp,
                             strategy_id=result.persona_used or "unknown",
+                            # v0.2.6 metadata
+                            attacker_model="gpt-4o-mini",  # Default attacker model
+                            judge_model=judge_model or "gpt-4o",
+                            critic_model="gpt-4o-mini",  # Default critic model
+                            config_snapshot=config_snapshot,
+                            serix_version=get_serix_version(),
+                            test_duration_seconds=test_duration,
                         )
                         if store.save(attack_to_save):
                             saved_count += 1
@@ -1340,6 +1423,14 @@ def test(
                     target=final_target,
                     output_path=json_report,
                     remediations=report_remediations,
+                    serix_version=get_serix_version(),
+                    attacker_model="gpt-4o-mini",
+                    judge_model=judge_model or "gpt-4o",
+                    critic_model="gpt-4o-mini",
+                    mode=effective_mode,
+                    depth=depth,
+                    test_duration_seconds=test_duration,
+                    fuzz_settings=config_snapshot.get("fuzz_settings"),
                 )
                 console.print(f"[cyan]JSON Report:[/cyan] {json_path}")
 
@@ -1415,6 +1506,20 @@ def test(
 
     # Save attacks for regression testing
     if not no_save:
+        # Compute test duration and build config snapshot
+        test_duration = time.time() - test_start_time
+        config_snapshot = _build_config_snapshot(
+            depth=depth,
+            mode="static",
+            fuzz_enabled=fuzz_config is not None,
+            fuzz_latency=fuzz_config.enable_latency if fuzz_config else False,
+            fuzz_errors=fuzz_config.enable_errors if fuzz_config else False,
+            fuzz_json=fuzz_config.enable_json_corruption if fuzz_config else False,
+            mutation_probability=(
+                fuzz_config.mutation_probability if fuzz_config else 0.3
+            ),
+        )
+
         saved_count = 0
         for current_goal, results in all_static_results:
             attacks_to_save = (
@@ -1428,6 +1533,13 @@ def test(
                     agent_response=atk.response or "",
                     owasp_code="LLM01",
                     strategy_id=atk.strategy,
+                    # v0.2.6 metadata
+                    attacker_model="gpt-4o-mini",  # Default attacker model
+                    judge_model=judge_model or "gpt-4o",
+                    critic_model="gpt-4o-mini",  # Default critic model
+                    config_snapshot=config_snapshot,
+                    serix_version=get_serix_version(),
+                    test_duration_seconds=test_duration,
                 )
                 if store.save(attack_to_save):
                     saved_count += 1

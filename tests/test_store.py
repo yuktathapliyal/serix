@@ -543,3 +543,174 @@ class TestErrorHandling:
 
         assert hash1 == hash2
         assert len(hash1) == 64  # SHA256 hex
+
+
+# =============================================================================
+# v0.2.6 Schema Migration Tests
+# =============================================================================
+
+
+class TestV026SchemaMigration:
+    """Tests for v0.2.5 → v0.2.6 schema migration.
+
+    P0 Priority: Ensures users upgrading from v0.2.5 don't lose data
+    and new metadata fields are added with sensible defaults.
+    """
+
+    def test_migrate_v025_adds_new_fields(
+        self, tmp_path: Path, legacy_v025_attack_json: dict
+    ) -> None:
+        """v0.2.5 records get new v0.2.6 metadata fields on load."""
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([legacy_v025_attack_json]))
+
+        store = AttackStore(path=store_path)
+        loaded = store.load_all()
+
+        assert len(loaded) == 1
+        attack = loaded[0]
+
+        # New v0.2.6 fields should be present with defaults
+        assert hasattr(attack, "attacker_model")
+        assert hasattr(attack, "judge_model")
+        assert hasattr(attack, "critic_model")
+        assert hasattr(attack, "config_snapshot")
+        assert hasattr(attack, "serix_version")
+        assert hasattr(attack, "test_duration_seconds")
+
+    def test_new_fields_have_sensible_defaults(
+        self, tmp_path: Path, legacy_v025_attack_json: dict
+    ) -> None:
+        """Migrated records have reasonable default values."""
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([legacy_v025_attack_json]))
+
+        store = AttackStore(path=store_path)
+        loaded = store.load_all()
+
+        attack = loaded[0]
+
+        # Verify defaults match expected values
+        assert attack.attacker_model == "unknown"
+        assert attack.judge_model == "unknown"
+        assert attack.critic_model == "unknown"
+        assert attack.config_snapshot == {}
+        assert attack.serix_version == "pre-0.2.6"  # Marks as legacy
+        assert attack.test_duration_seconds == 0.0
+
+    def test_migration_preserves_existing_v025_fields(
+        self, tmp_path: Path, legacy_v025_attack_json: dict
+    ) -> None:
+        """Migration preserves all original v0.2.5 field values."""
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([legacy_v025_attack_json]))
+
+        store = AttackStore(path=store_path)
+        loaded = store.load_all()
+
+        attack = loaded[0]
+
+        # All original v0.2.5 fields should be preserved exactly
+        assert attack.id == legacy_v025_attack_json["id"]
+        assert attack.payload == legacy_v025_attack_json["payload"]
+        assert attack.payload_hash == legacy_v025_attack_json["payload_hash"]
+        assert attack.goal == legacy_v025_attack_json["goal"]
+        assert (
+            attack.vulnerability_type == legacy_v025_attack_json["vulnerability_type"]
+        )
+        assert attack.owasp_code == legacy_v025_attack_json["owasp_code"]
+        assert (
+            attack.first_exploited_at == legacy_v025_attack_json["first_exploited_at"]
+        )
+        assert attack.last_verified_at == legacy_v025_attack_json["last_verified_at"]
+        assert attack.current_status == legacy_v025_attack_json["current_status"]
+        assert attack.judge_reasoning == legacy_v025_attack_json["judge_reasoning"]
+        assert attack.agent_response == legacy_v025_attack_json["agent_response"]
+        assert attack.strategy_id == legacy_v025_attack_json["strategy_id"]
+
+    def test_v026_migration_is_idempotent(
+        self, tmp_path: Path, legacy_v025_attack_json: dict
+    ) -> None:
+        """Multiple loads don't corrupt v0.2.6 migrated data."""
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([legacy_v025_attack_json]))
+
+        store = AttackStore(path=store_path)
+
+        # Load multiple times
+        first_load = store.load_all()
+        second_load = store.load_all()
+        third_load = store.load_all()
+
+        # All loads should return same data
+        assert len(first_load) == len(second_load) == len(third_load) == 1
+        assert first_load[0].id == second_load[0].id == third_load[0].id
+        assert first_load[0].serix_version == "pre-0.2.6"
+        assert second_load[0].serix_version == "pre-0.2.6"
+        assert third_load[0].serix_version == "pre-0.2.6"
+
+    def test_v026_migration_writes_back(
+        self, tmp_path: Path, legacy_v025_attack_json: dict
+    ) -> None:
+        """Migration persists the new fields back to disk."""
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([legacy_v025_attack_json]))
+
+        store = AttackStore(path=store_path)
+        store.load_all()
+
+        # Read the file directly and verify new fields are present
+        with open(store_path) as f:
+            saved_data = json.load(f)
+
+        assert len(saved_data) == 1
+        assert "serix_version" in saved_data[0]
+        assert saved_data[0]["serix_version"] == "pre-0.2.6"
+        assert "attacker_model" in saved_data[0]
+        assert "config_snapshot" in saved_data[0]
+
+    def test_records_with_v026_fields_not_re_migrated(self, tmp_path: Path) -> None:
+        """Records that already have v0.2.6 fields are not modified."""
+        v026_record = {
+            "id": "new12345",
+            "payload": "v0.2.6 payload",
+            "payload_hash": "abcdef1234567890",
+            "goal": "test goal",
+            "vulnerability_type": "jailbreak",
+            "owasp_code": "LLM01",
+            "first_exploited_at": "2024-12-20T10:00:00",
+            "last_verified_at": "2024-12-20T10:00:00",
+            "current_status": "exploited",
+            "judge_reasoning": "Test",
+            "agent_response": "Response",
+            "strategy_id": "test_strategy",
+            # v0.2.6 fields already present
+            "attacker_model": "gpt-4o-mini",
+            "judge_model": "gpt-4o",
+            "critic_model": "gpt-4o-mini",
+            "config_snapshot": {"depth": 5, "mode": "adaptive"},
+            "serix_version": "0.2.6",
+            "test_duration_seconds": 12.5,
+        }
+
+        store_path = tmp_path / ".serix" / "attacks.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(json.dumps([v026_record]))
+
+        store = AttackStore(path=store_path)
+        loaded = store.load_all()
+
+        attack = loaded[0]
+
+        # Original v0.2.6 values should be preserved, not overwritten
+        assert attack.attacker_model == "gpt-4o-mini"
+        assert attack.judge_model == "gpt-4o"
+        assert attack.critic_model == "gpt-4o-mini"
+        assert attack.config_snapshot == {"depth": 5, "mode": "adaptive"}
+        assert attack.serix_version == "0.2.6"
+        assert attack.test_duration_seconds == 12.5

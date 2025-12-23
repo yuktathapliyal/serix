@@ -1403,12 +1403,36 @@
                         <th>Value</th>
                     </tr>
                     <tr>
+                        <td>Serix Version</td>
+                        <td>{{ report.serix_version or 'N/A' }}</td>
+                    </tr>
+                    <tr>
                         <td>Target</td>
                         <td>{{ report.target }}</td>
                     </tr>
                     <tr>
                         <td>Attack Goal</td>
                         <td>{{ report.goal }}</td>
+                    </tr>
+                    <tr>
+                        <td>Mode</td>
+                        <td>{{ (report.mode or 'adaptive') | capitalize }}</td>
+                    </tr>
+                    <tr>
+                        <td>Depth</td>
+                        <td>{{ report.depth or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Attacker Model</td>
+                        <td>{{ report.attacker_model or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Judge Model</td>
+                        <td>{{ report.judge_model or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Critic Model</td>
+                        <td>{{ report.critic_model or 'N/A' }}</td>
                     </tr>
                     <tr>
                         <td>Persona Used</td>
@@ -1421,6 +1445,10 @@
                     <tr>
                         <td>Confidence</td>
                         <td>{{ report.confidence | upper }}</td>
+                    </tr>
+                    <tr>
+                        <td>Duration</td>
+                        <td>{{ "%.2f"|format(report.test_duration_seconds or 0) }}s</td>
                     </tr>
                 </table>
             </div>
@@ -1694,8 +1722,32 @@
                         <td>{{ report.total_attacks }}</td>
                     </tr>
                     <tr>
+                        <td>Serix Version</td>
+                        <td>{{ report.serix_version or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Mode</td>
+                        <td>{{ (report.mode or 'adaptive') | capitalize }}</td>
+                    </tr>
+                    <tr>
+                        <td>Depth</td>
+                        <td>{{ report.depth or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Attacker Model</td>
+                        <td>{{ report.attacker_model or 'gpt-4o-mini' }}</td>
+                    </tr>
+                    <tr>
                         <td>Judge Model</td>
                         <td>{{ report.judge_model or 'gpt-4o-mini' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Critic Model</td>
+                        <td>{{ report.critic_model or 'gpt-4o-mini' }}</td>
+                    </tr>
+                    <tr>
+                        <td>Duration</td>
+                        <td>{{ "%.2f"|format(report.test_duration_seconds or 0) }}s</td>
                     </tr>
                 </table>
             </div>

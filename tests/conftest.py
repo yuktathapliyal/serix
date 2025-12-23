@@ -74,6 +74,33 @@ def legacy_v020_attack_json() -> dict:
     }
 
 
+@pytest.fixture
+def legacy_v025_attack_json() -> dict:
+    """JSON structure from v0.2.5 (before v0.2.6 metadata).
+
+    This is the EXACT format users upgrading from v0.2.5 will have.
+    Has: all v0.2.5 fields
+    Missing: attacker_model, judge_model, critic_model, config_snapshot,
+             serix_version, test_duration_seconds (v0.2.6 fields)
+    """
+    return {
+        "id": "def67890",
+        "payload": "v0.2.5 test payload",
+        "payload_hash": "a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "goal": "test v0.2.5 migration",
+        "vulnerability_type": "jailbreak",
+        "owasp_code": "LLM01",
+        "first_exploited_at": "2024-12-15T14:30:00",
+        "last_verified_at": "2024-12-15T14:35:00",
+        "current_status": "exploited",
+        "judge_reasoning": "Agent was compromised",
+        "agent_response": "Here is the secret...",
+        "strategy_id": "grandma_exploit",
+        # Missing v0.2.6 fields: attacker_model, judge_model, critic_model,
+        #                        config_snapshot, serix_version, test_duration_seconds
+    }
+
+
 # =============================================================================
 # Storage Fixtures
 # =============================================================================
