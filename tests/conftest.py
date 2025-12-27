@@ -6,6 +6,7 @@ Provides mocks, sample data, and test utilities that don't require API keys.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +18,16 @@ from serix.regression.store import AttackStore, StoredAttack
 
 if TYPE_CHECKING:
     pass
+
+
+# =============================================================================
+# Environment Setup
+# =============================================================================
+
+# Disable ANSI color codes in test output. Rich and Typer respect NO_COLOR,
+# so this ensures consistent plain-text output across Mac, Linux, and CI.
+os.environ["NO_COLOR"] = "1"
+os.environ["TERM"] = "dumb"
 
 
 # =============================================================================
