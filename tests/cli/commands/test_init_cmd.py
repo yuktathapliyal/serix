@@ -29,10 +29,11 @@ class TestInitCommand:
                 assert config_path.exists()
 
                 content = config_path.read_text()
+                assert "[target]" in content
                 assert "[attack]" in content
-                assert "[models]" in content
-                assert "[output]" in content
-                assert "[dev]" in content
+                # These are commented out in the template (sensible defaults)
+                assert "# [models]" in content or "[models]" in content
+                assert "# [output]" in content or "[output]" in content
 
     def test_init_custom_path(self) -> None:
         """Test init with custom path."""
@@ -81,7 +82,7 @@ class TestInitCommand:
                 assert "existing content" not in content
 
     def test_init_template_has_all_sections(self) -> None:
-        """Test init template contains all expected sections."""
+        """Test init template contains all expected sections per spec 1.8."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with runner.isolated_filesystem(temp_dir=tmpdir):
                 result = runner.invoke(app, ["init"])
@@ -90,18 +91,22 @@ class TestInitCommand:
 
                 content = Path(CONFIG_FILENAME).read_text()
 
-                # Check all sections
+                # Check required sections per spec 1.8
+                assert "[target]" in content
+                assert 'path = "agent.py:my_agent"' in content
+
                 assert "[attack]" in content
                 assert "depth = 5" in content
                 assert 'mode = "adaptive"' in content
                 assert 'scenarios = "all"' in content
+                assert "goal =" in content  # Has default goal
 
-                assert "[models]" in content
-                assert 'attacker = "gpt-4o-mini"' in content
-                assert 'judge = "gpt-4o"' in content
+                # Check commented sections (sensible defaults)
+                assert "# [regression]" in content
+                assert "# [output]" in content
+                assert "# [models]" in content
+                assert "# [fuzz]" in content
 
-                assert "[output]" in content
-                assert 'report = "serix-report.html"' in content
-
-                assert "[dev]" in content
-                assert 'recording_dir = "captures"' in content
+                # Check behavior section
+                assert "# BEHAVIOR" in content
+                assert "# verbose = false" in content
