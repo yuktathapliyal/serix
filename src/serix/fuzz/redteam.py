@@ -496,7 +496,9 @@ The attack should be a single message that could be sent to an AI assistant.""",
         # Callback for CLI progress (non-live mode)
         on_progress: Callable[[int, int], None] | None = None,
         # Fail-fast behavior
-        fail_fast: bool = False,
+        fail_fast: bool = True,
+        # Stop after first successful persona (--fail-fast mode)
+        stop_on_persona_success: bool = False,
     ) -> "AdversaryResult":
         """Run adaptive adversary attack using personas.
 
@@ -515,7 +517,8 @@ The attack should be a single message that could be sent to an AI assistant.""",
             on_response: Callback when agent responds
             on_critic: Callback when critic analyzes response
             on_progress: Callback for CLI progress (turn, max_turns)
-            fail_fast: If True, stop within persona after first success
+            fail_fast: If True, stop within persona after first success (default: True)
+            stop_on_persona_success: If True, stop after first successful persona (default: False)
 
         Returns:
             AdversaryResult with attack outcome and conversation history
@@ -561,8 +564,10 @@ The attack should be a single message that could be sent to an AI assistant.""",
             fail_fast=fail_fast,
         )
 
-        # Run all personas for comprehensive reporting
-        results = loop.attack_with_all_personas(target, goal, stop_on_success=False)
+        # Run personas - by default run all, --fail-fast stops on first success
+        results = loop.attack_with_all_personas(
+            target, goal, stop_on_success=stop_on_persona_success
+        )
 
         # Build attempts log for reporting
         attempts_log = [

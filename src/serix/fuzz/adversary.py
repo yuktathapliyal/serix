@@ -9,10 +9,9 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
-from rich.console import Console
-
 from serix.core.config_loader import get_models
 from serix.fuzz.personas import AttackContext, AttackPersona
+from serix.ui.theme import get_console
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -27,7 +26,7 @@ OnResponseCallback = Callable[[str, int], None]  # (response, latency_ms)
 OnCriticCallback = Callable[[str, str], None]  # (verdict, confidence)
 OnProgressCallback = Callable[[int, int], None]  # (turn, max_turns)
 
-console = Console()
+console = get_console()
 
 
 @dataclass
@@ -520,8 +519,14 @@ class AdversaryLoop:
         Returns:
             List of AdversaryResults, one per persona
         """
+        from rich.status import Status
+
         results = []
         total_personas = len(self.personas)
+
+        # Show campaign header (non-verbose mode only)
+        if not self.verbose and self.on_progress is not None:
+            console.print("\n[serix.label]Running adversarial campaign:[/]")
 
         for i, persona in enumerate(self.personas, 1):
             if self.verbose:
@@ -539,23 +544,36 @@ class AdversaryLoop:
 
                 return callback
 
-            # Only inject progress callback if not in verbose mode (avoid duplicate output)
+            # Only show turn-by-turn progress in verbose mode
             progress_cb = None
-            if not self.verbose and self.on_progress is not None:
+            if self.verbose and self.on_progress is not None:
                 progress_cb = make_progress_callback(i, total_personas, persona.name)
 
-            result = self.attack(target, goal, persona, on_progress=progress_cb)
+            # Non-verbose: show spinner while persona runs
+            if not self.verbose and self.on_progress is not None:
+                with Status(
+                    f"[cyan]{persona.name}[/]...",
+                    console=console,
+                    spinner="dots",
+                ):
+                    result = self.attack(target, goal, persona, on_progress=None)
+            else:
+                # Verbose mode: existing behavior with turn-by-turn output
+                result = self.attack(target, goal, persona, on_progress=progress_cb)
+
             results.append(result)
 
-            # Print persona result (non-verbose mode)
+            # Non-verbose: print completed result with formatting
             if not self.verbose and self.on_progress is not None:
-                status_icon = "✓" if result.success else "✗"
-                status_text = "exploited" if result.success else "defended"
-                status_color = "red" if result.success else "green"
-                console.print(
-                    f"[dim][{i}/{total_personas}][/dim] [cyan]{persona.name}[/cyan]: "
-                    f"[{status_color}]{status_icon} {status_text}[/{status_color}]"
-                )
+                if result.success:
+                    # EXPLOITED - red, with turn count (shows attack complexity)
+                    console.print(
+                        f"• {persona.name:<12} → [serix.bad]EXPLOITED[/] "
+                        f"[dim](Turn {result.turns_taken})[/]"
+                    )
+                else:
+                    # Defended - green, no turn count needed
+                    console.print(f"• {persona.name:<12} → [serix.ok]Defended[/]")
 
             # Early exit only if requested
             if stop_on_success and result.success:

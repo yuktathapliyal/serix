@@ -133,6 +133,7 @@ class JailbreakerPersona(AttackPersona):
         super().__init__(client, config)
         self._technique_index = 0
         self._failed_techniques: set[str] = set()
+        self._last_technique: str | None = None
 
     def get_techniques(self) -> list[str]:
         """Return list of available jailbreak techniques."""
@@ -143,6 +144,7 @@ class JailbreakerPersona(AttackPersona):
         super().reset()
         self._technique_index = 0
         self._failed_techniques.clear()
+        self._last_technique = None
 
     def get_system_prompt(self) -> str:
         """Return the system prompt for adaptive attack generation."""
@@ -249,13 +251,14 @@ Requirements:
         Returns:
             AttackPayload with the jailbreak attempt
         """
+        # Mark previous technique as failed BEFORE selecting next one
+        if context.turn > 1 and self._last_technique is not None:
+            self._failed_techniques.add(self._last_technique)
+
         technique = self._select_technique(context)
 
-        # Check if previous technique failed
-        if context.turn > 1 and len(context.previous_attempts) > 0:
-            prev_technique_idx = max(0, self._technique_index - 2)
-            if prev_technique_idx < len(self.TECHNIQUE_ORDER):
-                self._failed_techniques.add(self.TECHNIQUE_ORDER[prev_technique_idx])
+        # Track this technique for next turn
+        self._last_technique = technique
 
         # Generate novel attack with LLM
         if technique == "llm_generated":
