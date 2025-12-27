@@ -1,5 +1,7 @@
 """Serix - AI agent testing framework."""
 
+from importlib.metadata import version as _get_version
+
 from serix.core.client import SerixClient
 from serix.core.config_loader import SerixFileConfig, load_config
 from serix.core.target import (
@@ -29,7 +31,7 @@ from serix.eval import (
 from serix.fuzz.redteam import Attack, AttackResults, RedTeamEngine
 from serix.sdk.decorator import Agent, scan
 
-__version__ = "0.2.6"
+__version__ = _get_version("serix")
 __all__ = [
     # SDK (clean user interface)
     "scan",

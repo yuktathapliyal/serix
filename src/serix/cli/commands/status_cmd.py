@@ -72,7 +72,7 @@ def status_command(
             console.print("[]")
         else:
             console.print("[yellow]No .serix/ directory found.[/yellow]")
-            console.print("Run [bold]serix test2[/bold] to create one.")
+            console.print("Run [bold]serix test[/bold] to create one.")
         raise typer.Exit(0)
 
     # Get all targets
