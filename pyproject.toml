@@ -1,6 +1,6 @@
 [project]
 name = "serix"
-version = "0.2.5"
+version = "0.2.7"
 description = "Automated adversarial testing for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
