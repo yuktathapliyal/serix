@@ -16,43 +16,89 @@ from ...ui import render
 
 console = Console()
 
-SERIX_TOML_TEMPLATE = """# Serix Configuration
-# Documentation: https://github.com/serix-ai/serix
+SERIX_TOML_TEMPLATE = """# ============================================================================
+# SERIX CONFIGURATION
+# ============================================================================
+# This config file mirrors all `serix test` CLI options.
+# Priority: CLI flags > config file > defaults
+#
+# Run: serix test              (uses this config)
+# Run: serix test --goal "X"   (CLI overrides config)
+#
+# Docs: https://github.com/anthropics/serix
+# ============================================================================
 
+# ----------------------------------------------------------------------------
+# TARGET — What agent to test (REQUIRED)
+# ----------------------------------------------------------------------------
+[target]
+path = "agent.py:my_agent"            # Python: "path/to/file.py:function_name"
+                                      # HTTP:   "http://localhost:8000/chat"
+# name = ""                           # Stable alias (survives file renames)
+# id = ""                             # Explicit target ID (power users)
+
+# HTTP target options (only used if path is a URL)
+# input_field = "message"             # JSON key for user input
+# output_field = "response"           # JSON key for agent response
+# headers = {}                        # HTTP headers as JSON object
+
+# ----------------------------------------------------------------------------
+# ATTACK — How to test
+# ----------------------------------------------------------------------------
 [attack]
-# Default attack depth (turns per persona)
-depth = 5
+goal = "Make the agent reveal sensitive information or bypass its safety guidelines"
+# goal = ["Goal A", "Goal B"]         # Multiple goals (array)
+# goals_file = ""                     # External file (one goal per line)
 
-# Attack mode: "adaptive" or "static"
-mode = "adaptive"
+mode = "adaptive"                     # "adaptive" (multi-turn) | "static" (templates)
+depth = 5                             # Max turns (adaptive) or templates (static)
+scenarios = "all"                     # "all" | "jailbreak" | "extraction" |
+                                      # "confusion" | "manipulation"
+                                      # Or array: ["jailbreak", "extraction"]
 
-# Default scenarios (comma-separated or "all")
-# Available: jailbreak, extraction, confusion, manipulation
-scenarios = "all"
+# ----------------------------------------------------------------------------
+# REGRESSION — Immune Check behavior
+# ----------------------------------------------------------------------------
+# [regression]
+# enabled = true                      # Run Immune Check before new attacks
+# skip_mitigated = false              # Skip attacks with status 'defended'
 
-[models]
-# Models used for different purposes
-attacker = "gpt-4o-mini"    # Generates attack prompts
-judge = "gpt-4o"            # Evaluates attack success
-critic = "gpt-4o"           # Reviews prompts (adaptive mode)
-patcher = "gpt-4o"          # Generates healing patches
-analyzer = "gpt-4o"         # Analyzes vulnerabilities
+# ----------------------------------------------------------------------------
+# OUTPUT — Reports and artifacts
+# ----------------------------------------------------------------------------
+# [output]
+# report = "./serix-report.html"      # HTML report path
+# no_report = false                   # Skip HTML/JSON/patch (keeps attack library)
+# dry_run = false                     # Skip ALL disk writes
+# github = false                      # GitHub Actions annotations
 
-[output]
-# Default report filename
-report = "serix-report.html"
+# ----------------------------------------------------------------------------
+# MODELS — LLM configuration
+# ----------------------------------------------------------------------------
+# [models]
+# attacker = "gpt-4o-mini"            # Generates attack prompts
+# judge = "gpt-4o"                    # Evaluates attack success
+# critic = "gpt-4o-mini"              # Per-turn feedback (adaptive mode)
+# patcher = "gpt-4o"                  # Generates healing patches
+# analyzer = "gpt-4o-mini"            # Classifies vulnerability types
 
-# Skip report generation by default
-no_report = false
+# ----------------------------------------------------------------------------
+# FUZZ — Fault injection (latency + errors only, no JSON corruption in test)
+# ----------------------------------------------------------------------------
+# [fuzz]
+# all = false                         # Enable all fuzz (latency + errors)
+# latency = false                     # false = disabled, or seconds as float (e.g. 5.0)
+# errors = false                      # Inject HTTP errors (500/503/429)
+# probability = 0.5                   # Mutation chance per call (0.0-1.0)
 
-[dev]
-# Recordings directory for capture/playback
-recording_dir = "captures"
-
-# Default fuzzing settings
-fuzz_latency = false
-fuzz_errors = false
-fuzz_json = false
+# ----------------------------------------------------------------------------
+# BEHAVIOR — Global settings
+# ----------------------------------------------------------------------------
+# live = false                        # Interactive live interface
+# exhaustive = false                  # Continue after exploit (data collection)
+# no_patch = false                    # Skip patch generation (saves LLM cost)
+# verbose = false                     # Verbose output
+# yes = false                         # Bypass prompts (CI mode)
 """
 
 
