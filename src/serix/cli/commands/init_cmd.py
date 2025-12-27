@@ -25,7 +25,7 @@ SERIX_TOML_TEMPLATE = """# =====================================================
 # Run: serix test              (uses this config)
 # Run: serix test --goal "X"   (CLI overrides config)
 #
-# Docs: https://github.com/anthropics/serix
+# Docs: https://github.com/yuktathapliyal/serix
 # ============================================================================
 
 # ----------------------------------------------------------------------------
