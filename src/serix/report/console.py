@@ -12,7 +12,7 @@ from rich.tree import Tree
 from serix.core.types import RecordingSession
 from serix.fuzz.engine import FuzzResult
 from serix.fuzz.redteam import Attack, AttackResults
-from serix.ui import FAILURE, SUCCESS, get_console
+from serix.ui import BULLET, FAILURE, SEPARATOR, SUCCESS, get_console
 
 if TYPE_CHECKING:
     from serix.heal.types import HealingResult
@@ -342,27 +342,31 @@ MAX_DIFF_LINES_CLI = 50
 
 
 def print_healing_result(healing: "HealingResult") -> None:
-    """Print healing result with diff and tool fixes."""
-    console.print()
-    console.print(
-        Panel(
-            "[serix.label]SELF-HEALING PROPOSAL[/]",
-            border_style="cyan",
-            padding=(0, 2),
-        )
-    )
+    """Print healing result with diff and tool fixes.
 
-    # Show confidence and OWASP code
+    Visually isolated with separator for clear hierarchy.
+    """
+    # Visual separator to isolate this section
+    console.print()
+    console.print("[serix.rule]────────────────────────────────────────[/]")
+
+    # Header with confidence inline
     confidence_pct = int(healing.confidence * 100)
     console.print(
-        f"\n[serix.muted]Confidence:[/] {confidence_pct}%  "
-        f"[serix.muted]OWASP:[/] {healing.owasp_code}  "
-        f"[serix.muted]Type:[/] {healing.vulnerability_type}"
+        f"[serix.label]Self-Healing Proposal[/] "
+        f"[serix.muted](Confidence: {confidence_pct}%)[/]"
+    )
+    console.print()
+
+    # Classification line
+    console.print(
+        f"[serix.muted]Classification:[/] OWASP {healing.owasp_code} {BULLET} "
+        f"Type: {healing.vulnerability_type}"
     )
 
     # Text Fix (System Prompt Diff)
     if healing.text_fix:
-        console.print("\n[serix.ok]TEXT FIX (System Prompt):[/]")
+        console.print("\n[serix.label]Suggested Fix (System Prompt):[/]")
         console.print(f"[serix.muted]{healing.text_fix.explanation}[/]")
 
         diff_text = healing.text_fix.diff
@@ -399,11 +403,11 @@ def print_healing_result(healing: "HealingResult") -> None:
     else:
         console.print("\n[serix.warn]No text fix available (system_prompt required)[/]")
 
-    # Tool Fixes (Policy Recommendations)
+    # Policy Recommendations
     if healing.tool_fixes:
-        console.print("\n[serix.label]TOOL FIXES (Policy):[/]")
+        console.print("\n[serix.label]Recommendations:[/]")
 
-        tool_tree = Tree("Recommendations")
+        tool_tree = Tree("")
         for fix in healing.tool_fixes:
             # Color-code by severity
             if fix.severity == "required":
@@ -462,22 +466,21 @@ def print_immune_check_start(
 def print_immune_check_result(
     passed: int, total: int, planned: int | None = None
 ) -> None:
-    """Print the result of the Immune Check."""
+    """Print the result of the Immune Check.
+
+    Uses red sparingly - only the word FAILED is red, not the entire line.
+    """
     if passed == total:
         console.print(
-            f"[serix.ok]{SUCCESS} {passed}/{total} defended[/] "
-            "[serix.muted](previously vulnerable payloads)[/]"
+            f"[serix.label]Immune Check:[/] [serix.ok]PASSED[/] "
+            f"({passed}/{total} defended)"
         )
     else:
         failed = total - passed
-        # Show if we stopped early due to fail_fast
-        if planned and total < planned:
-            console.print(
-                f"[serix.bad]{FAILURE} {failed}/{total} still vulnerable[/] "
-                f"[serix.muted](stopped early, {planned - total} not checked)[/]"
-            )
-        else:
-            console.print(f"[serix.bad]{FAILURE} {failed}/{total} still vulnerable[/]")
+        console.print(
+            f"[serix.label]Immune Check:[/] [serix.bad]FAILED[/] "
+            f"({failed}/{total} exploits reproduced)"
+        )
 
 
 def print_regression_failure(
@@ -485,38 +488,26 @@ def print_regression_failure(
     fail_fast: bool = True,
     will_prompt: bool = False,
 ) -> None:
-    """Print detailed regression failure information."""
+    """Print regression failure information.
+
+    Uses bold red text (no panel border) for a cleaner, less alarming look.
+    Shows a single explanation line instead of per-attack details.
+
+    Args:
+        failed_attacks: List of attacks that are still exploitable
+        fail_fast: Whether --fail-fast flag is set (unused, kept for API compat)
+        will_prompt: Whether user will be prompted to continue (unused)
+    """
     console.print()
-    console.print(
-        Panel(
-            "[serix.bad]REGRESSION DETECTED[/]",
-            border_style="red",
-            padding=(0, 2),
-        )
-    )
+    console.print("[bold red]REGRESSION DETECTED[/bold red]")
+    console.print("[serix.muted]Previously mitigated vulnerability has resurfaced.[/]")
 
-    for attack in failed_attacks[:3]:  # Show max 3
-        console.print()
-        console.print(f"[serix.warn]Attack:[/] {attack.id}")
-        payload_preview = (
-            attack.payload[:80] + "..." if len(attack.payload) > 80 else attack.payload
-        )
-        console.print(f"[serix.warn]Payload:[/] {payload_preview}")
-        console.print("[serix.warn]Status:[/] [serix.bad]STILL VULNERABLE[/]")
-
-    if len(failed_attacks) > 3:
-        console.print(f"\n[serix.muted]...and {len(failed_attacks) - 3} more[/]")
-
-    console.print()
-
-    # Don't show tip if we're about to prompt the user
-    if fail_fast and not will_prompt:
+    # Show count of failed attacks
+    if len(failed_attacks) > 1:
         console.print(
-            "[serix.muted]Tip: This agent is still vulnerable to a previous attack.[/]"
+            f"[serix.muted]{len(failed_attacks)} stored attacks are still exploitable.[/]"
         )
-        console.print(
-            "[serix.muted]     Run with --no-fail-fast to continue with new tests anyway.[/]"
-        )
+    console.print(f"[serix.rule]{SEPARATOR}[/]")
 
 
 def print_attacks_saved(count: int) -> None:

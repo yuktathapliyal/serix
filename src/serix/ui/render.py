@@ -43,17 +43,19 @@ def rule(console: Console) -> None:
     console.print(f"[serix.rule]{SEPARATOR}[/]")
 
 
-def kv(console: Console, label: str, value: str) -> None:
+def kv(console: Console, label: str, value: str, label_width: int = 6) -> None:
     """Render a key/value line with prefix.
 
-    Format: › Label: value
+    Format: › Label:  value (with consistent column alignment)
 
     Args:
         console: Rich console to print to
-        label: The key/label (will be colored with serix.label)
-        value: The value (plain text)
+        label: The key/label (plain white text)
+        value: The value (muted grey)
+        label_width: Width to pad label to (default: 6 for "Target")
     """
-    console.print(f"[serix.muted]{PREFIX}[/] [serix.label]{label}:[/] {value}")
+    padded_label = f"{label}:".ljust(label_width + 1)
+    console.print(f"[serix.muted]{PREFIX}[/] {padded_label} [serix.muted]{value}[/]")
 
 
 def section_header(console: Console, title: str, subtitle: str = "") -> None:
@@ -329,3 +331,78 @@ def muted(console: Console, message: str) -> None:
         message: Message to display
     """
     console.print(f"[serix.muted]{message}[/]")
+
+
+def scores_inline(console: Console, scores: dict[str, int]) -> None:
+    """Render scores on a single horizontal line.
+
+    Format: Scores: Overall 0 • Safety 0 • Compliance 0 • Info Leakage 0
+
+    Args:
+        console: Rich console to print to
+        scores: Dictionary of score name to value (0-100)
+    """
+    parts = [f"{name} {value}" for name, value in scores.items()]
+    line = f" {BULLET} ".join(parts)
+    console.print(f"[serix.label]Scores:[/] {line}")
+
+
+def persona_outcomes(
+    console: Console,
+    outcomes: list[dict[str, str | bool | int]],
+) -> None:
+    """Render persona outcomes as a compact bullet list.
+
+    Format:
+    Persona Outcomes:
+    • Jailbreaker   → EXPLOITED (Turn 4)
+    • Extractor     → defended
+
+    Args:
+        console: Rich console to print to
+        outcomes: List of dicts with 'persona', 'success', and optionally 'turns' keys
+    """
+    if not outcomes:
+        return
+
+    console.print("[serix.label]Persona Outcomes:[/]")
+
+    # Calculate max persona name length for alignment
+    max_name = max(len(str(o.get("persona", ""))) for o in outcomes)
+
+    for outcome in outcomes:
+        persona = str(outcome.get("persona", "unknown"))
+        success = outcome.get("success", False)
+        turns = outcome.get("turns", 0)
+
+        if success:
+            status = "[serix.bad]EXPLOITED[/]"
+            turns_info = f" (Turn {turns})" if turns else ""
+        else:
+            status = "[serix.muted]defended[/]"
+            turns_info = ""
+
+        console.print(f"{BULLET} {persona:<{max_name}}  → {status}{turns_info}")
+
+
+def cost_estimate(
+    console: Console,
+    goals: int,
+    personas: int,
+    turns: int,
+) -> None:
+    """Render cost estimate block.
+
+    Format: Cost Estimate: 1 goal(s) x 4 persona(s) x 4 turn(s) = ~16 API calls
+
+    Args:
+        console: Rich console to print to
+        goals: Number of goals to test
+        personas: Number of personas per goal
+        turns: Max turns per persona
+    """
+    total = goals * personas * turns
+    console.print(
+        f"Cost Estimate: "
+        f"[serix.muted]{goals} goal(s) x {personas} persona(s) x {turns} turn(s) = ~{total} API calls[/]"
+    )
