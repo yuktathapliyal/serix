@@ -39,7 +39,7 @@ def status_command(
         typer.Option(
             "-v",
             "--verbose",
-            help="Show full target IDs",
+            help="Show per-attack details (goals, strategies, statuses)",
         ),
     ] = False,
 ) -> None:
@@ -126,6 +126,15 @@ def status_command(
                 "defended": defended,
                 "health": health,
                 "last_tested": last_tested.isoformat() if last_tested else None,
+                "attacks": [
+                    {
+                        "goal": a.goal,
+                        "strategy": a.strategy_id,
+                        "status": a.status,
+                        "owasp_code": a.owasp_code,
+                    }
+                    for a in attacks
+                ],
             }
         )
 
@@ -199,3 +208,38 @@ def _print_table(statuses: list[dict], verbose: bool = False) -> None:
         table.add_row(*row)
 
     console.print(table)
+
+    # Show per-attack details when verbose
+    if verbose:
+        for s in statuses:
+            attacks = s.get("attacks", [])
+            if not attacks:
+                continue
+
+            console.print()
+            console.print(f"[bold]{s['name']}[/bold] — Attack Details:")
+
+            attack_table = Table(show_header=True, box=None, padding=(0, 2))
+            attack_table.add_column("Goal", style="dim", max_width=50)
+            attack_table.add_column("Strategy", style="cyan")
+            attack_table.add_column("Status", justify="center")
+            attack_table.add_column("OWASP", style="dim")
+
+            for attack in attacks:
+                # Truncate goal if too long
+                goal = attack["goal"]
+                if len(goal) > 50:
+                    goal = goal[:47] + "..."
+
+                # Color status
+                status = attack["status"]
+                if status == "exploited":
+                    status_str = "[red]EXPLOITED[/red]"
+                else:
+                    status_str = "[green]DEFENDED[/green]"
+
+                owasp = attack.get("owasp_code") or "-"
+
+                attack_table.add_row(goal, attack["strategy"], status_str, owasp)
+
+            console.print(attack_table)
