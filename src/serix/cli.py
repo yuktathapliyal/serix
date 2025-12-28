@@ -1040,6 +1040,17 @@ def test(
         print_regression_failure,
     )
 
+    # Skip security testing if fuzz_only mode
+    if not test_run_config.should_run_security_tests():
+        target_obj.teardown()
+        if fuzz_config:
+            console.print(
+                "[green]✓[/green] Fuzzing mode completed (security tests skipped)"
+            )
+        else:
+            console.print("[dim]--fuzz-only without --fuzz: nothing to do[/dim]")
+        return
+
     # Immune Check: replay stored attacks first
     # Only create store if not dry_run (respects --dry-run flag)
     store = AttackStore() if test_run_config.should_write_to_disk() else None
