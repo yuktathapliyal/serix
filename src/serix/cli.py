@@ -1457,8 +1457,12 @@ def test(
                     console.print(f"     {first_line}")
 
             # Generate HTML report if requested
-            # Respects --dry-run (should_write_to_disk) flag
-            if test_run_config.should_write_to_disk() and final_report:
+            # Respects both --dry-run (via should_write_to_disk) and --no-report flags
+            if (
+                test_run_config.should_write_to_disk()
+                and test_run_config.should_generate_report()
+                and final_report is not None
+            ):
                 # Convert internal GoalTestResult to report GoalResult
                 from serix.report.html import GoalResult as ReportGoalResult
 
@@ -1603,8 +1607,13 @@ def test(
             print_attacks_saved(saved_count)
 
     # Generate HTML report if requested (using first result for now)
-    # Respects --dry-run (should_write_to_disk) flag
-    if test_run_config.should_write_to_disk() and final_report and all_static_results:
+    # Respects both --dry-run (via should_write_to_disk) and --no-report flags
+    if (
+        test_run_config.should_write_to_disk()
+        and test_run_config.should_generate_report()
+        and final_report is not None
+        and all_static_results
+    ):
         first_goal, first_results = all_static_results[0]
         report_path = generate_html_report(
             results=first_results,
