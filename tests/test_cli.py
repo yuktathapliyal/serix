@@ -246,17 +246,8 @@ class TestTestCommand:
 
         assert "report" in result.output.lower()
 
-    def test_test_fail_fast_flag(self) -> None:
-        """--fail-fast flag is documented."""
-        result = runner.invoke(app, ["test", "--help"])
-
-        assert "fail-fast" in result.output.lower()
-
-    def test_test_no_save_flag(self) -> None:
-        """--no-save flag is documented."""
-        result = runner.invoke(app, ["test", "--help"])
-
-        assert "no-save" in result.output.lower()
+    # NOTE: test_test_fail_fast_flag removed - --fail-fast deprecated in v0.3.0
+    # NOTE: test_test_no_save_flag removed - --no-save deprecated in v0.3.0
 
     def test_test_verbose_flag(self) -> None:
         """--verbose flag is documented."""

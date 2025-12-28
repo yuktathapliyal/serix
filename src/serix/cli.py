@@ -790,7 +790,7 @@ def test(
 
         fuzz_config = FuzzConfig(
             enable_latency=fuzz or fuzz_latency,
-            enable_errors=fuzz_errors,  # Only if explicitly requested
+            enable_errors=fuzz or fuzz_errors,  # --fuzz enables ALL per spec
             enable_json_corruption=fuzz or fuzz_json,
             mutation_probability=fuzz_probability,
         )
