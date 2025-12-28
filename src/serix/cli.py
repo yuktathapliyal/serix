@@ -1041,10 +1041,13 @@ def test(
     )
 
     # Immune Check: replay stored attacks first
-    store = AttackStore()
-    stored_count = store.count()
+    # Only create store if not dry_run (respects --dry-run flag)
+    store = AttackStore() if test_run_config.should_write_to_disk() else None
+    stored_count = store.count() if store else 0
 
     if stored_count > 0 and not skip_regression:
+        # Type guard: store is not None if stored_count > 0
+        assert store is not None
         # Calculate actual replay count when skip_mitigated is True
         if skip_mitigated:
             attacks_to_replay = len(store.load_all(skip_mitigated=True))
@@ -1428,7 +1431,7 @@ def test(
                             serix_version=get_serix_version(),
                             test_duration_seconds=test_duration,
                         )
-                        if store.save(attack_to_save):
+                        if store and store.save(attack_to_save):
                             saved_count += 1
                 if saved_count > 0:
                     print_attacks_saved(saved_count)
@@ -1454,7 +1457,8 @@ def test(
                     console.print(f"     {first_line}")
 
             # Generate HTML report if requested
-            if final_report:
+            # Respects --dry-run (should_write_to_disk) flag
+            if test_run_config.should_write_to_disk() and final_report:
                 # Convert internal GoalTestResult to report GoalResult
                 from serix.report.html import GoalResult as ReportGoalResult
 
@@ -1593,13 +1597,14 @@ def test(
                     serix_version=get_serix_version(),
                     test_duration_seconds=test_duration,
                 )
-                if store.save(attack_to_save):
+                if store and store.save(attack_to_save):
                     saved_count += 1
         if saved_count > 0:
             print_attacks_saved(saved_count)
 
     # Generate HTML report if requested (using first result for now)
-    if final_report and all_static_results:
+    # Respects --dry-run (should_write_to_disk) flag
+    if test_run_config.should_write_to_disk() and final_report and all_static_results:
         first_goal, first_results = all_static_results[0]
         report_path = generate_html_report(
             results=first_results,
