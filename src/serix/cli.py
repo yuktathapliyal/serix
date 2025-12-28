@@ -558,12 +558,10 @@ def test(
         ),
     ] = None,
     goal: Annotated[
-        str | None,
-        typer.Option("--goal", "-g", help="Attack goal description"),
-    ] = None,
-    goals: Annotated[
-        str | None,
-        typer.Option("--goals", help="Comma-separated attack goals"),
+        list[str] | None,
+        typer.Option(
+            "--goal", "-g", help="Attack goal (can be repeated for multiple goals)"
+        ),
     ] = None,
     goals_file: Annotated[
         Path | None,
@@ -589,10 +587,6 @@ def test(
         Path | None,
         typer.Option("--report", "-r", help="Generate HTML report at path"),
     ] = None,
-    json_report: Annotated[
-        Path | None,
-        typer.Option("--json-report", "-j", help="Generate JSON report at path"),
-    ] = None,
     github: Annotated[
         bool,
         typer.Option("--github", help="Write to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY"),
@@ -608,6 +602,24 @@ def test(
             help="Model for impartial judging (default: from serix.toml)",
         ),
     ] = None,
+    attacker_model: Annotated[
+        str | None,
+        typer.Option("--attacker-model", help="Model for generating attacks"),
+    ] = None,
+    critic_model: Annotated[
+        str | None,
+        typer.Option(
+            "--critic-model", help="Model for per-turn feedback (adaptive mode)"
+        ),
+    ] = None,
+    patcher_model: Annotated[
+        str | None,
+        typer.Option("--patcher-model", help="Model for generating healing patches"),
+    ] = None,
+    analyzer_model: Annotated[
+        str | None,
+        typer.Option("--analyzer-model", help="Model for vulnerability classification"),
+    ] = None,
     input_field: Annotated[
         str,
         typer.Option("--input-field", help="HTTP input field name (for URL targets)"),
@@ -620,6 +632,14 @@ def test(
         str | None,
         typer.Option("--headers", help="HTTP headers as JSON (for URL targets)"),
     ] = None,
+    name: Annotated[
+        str | None,
+        typer.Option("--name", help="Stable alias for target (survives file renames)"),
+    ] = None,
+    target_id: Annotated[
+        str | None,
+        typer.Option("--target-id", help="Explicit target ID (overrides --name)"),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Verbose output")
     ] = False,
@@ -627,20 +647,6 @@ def test(
         Path | None,
         typer.Option("--config", "-c", help="Path to serix.toml config file"),
     ] = None,
-    no_save: Annotated[
-        bool, typer.Option("--no-save", help="Disable auto-save of successful attacks")
-    ] = False,
-    save_all: Annotated[
-        bool,
-        typer.Option("--save-all", help="Save all attacks including failed ones"),
-    ] = False,
-    fail_fast: Annotated[
-        bool,
-        typer.Option(
-            "--fail-fast",
-            help="Stop on first success within each persona (faster, incomplete report)",
-        ),
-    ] = False,
     skip_mitigated: Annotated[
         bool,
         typer.Option(
@@ -648,12 +654,30 @@ def test(
             help="Skip attacks that have been mitigated (faster runs)",
         ),
     ] = False,
-    no_immune: Annotated[
+    skip_regression: Annotated[
         bool,
         typer.Option(
-            "--no-immune",
+            "--skip-regression",
             help="Skip immune check entirely (for attack collection workflow)",
         ),
+    ] = False,
+    exhaustive: Annotated[
+        bool,
+        typer.Option(
+            "--exhaustive", help="Continue conversation after exploit (data collection)"
+        ),
+    ] = False,
+    no_report: Annotated[
+        bool,
+        typer.Option("--no-report", help="Skip HTML/JSON report generation"),
+    ] = False,
+    no_patch: Annotated[
+        bool,
+        typer.Option("--no-patch", help="Skip automatic patch generation"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Skip all disk writes (useful for testing)"),
     ] = False,
     # Fuzzing parameters
     fuzz: Annotated[
@@ -679,6 +703,10 @@ def test(
             help="Mutation probability 0.0-1.0 (default: 0.5)",
         ),
     ] = 0.5,
+    fuzz_only: Annotated[
+        bool,
+        typer.Option("--fuzz-only", help="Skip security testing, only run fuzzing"),
+    ] = False,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompts (for CI/CD)"),
@@ -703,8 +731,14 @@ def test(
     """
     import json
 
+    # Deprecated flags replaced with defaults (v0.3.0)
+    fail_fast = False  # Default: continue after success
+    no_save = False  # Default: save successful attacks
+    save_all = False  # Default: only save successful attacks
+
     from serix.core.client import get_original_openai_class
     from serix.core.config_loader import find_config_file, load_config
+    from serix.core.run_config import TestRunConfig
     from serix.core.target import DecoratorTarget, HttpTarget, Target
     from serix.eval import Evaluator, RemediationEngine
     from serix.fuzz.redteam import RedTeamEngine
@@ -712,8 +746,8 @@ def test(
     from serix.report.console import print_attacks_saved
     from serix.report.github import write_github_output
     from serix.report.html import generate_evaluation_report, generate_html_report
-    from serix.report.json_export import export_json
     from serix.sdk.decorator import Agent, get_system_prompt, load_function_from_path
+    from serix.workflows.test_workflow import TestWorkflow
 
     # Load config file if provided or found
     config_path = config or find_config_file()
@@ -731,7 +765,7 @@ def test(
     )
     final_verbose = verbose or file_config.verbose
 
-    # Build goal list from various sources (priority: --goals-file > --goals > --goal > config)
+    # Build goal list from various sources (priority: --goals-file > --goal > config)
     goal_list: list[str] = []
     if goals_file and goals_file.exists():
         goal_list = [
@@ -739,10 +773,8 @@ def test(
             for line in goals_file.read_text().splitlines()
             if line.strip() and not line.strip().startswith("#")
         ]
-    elif goals:
-        goal_list = [g.strip() for g in goals.split(",") if g.strip()]
     elif goal:
-        goal_list = [goal]
+        goal_list = list(goal)  # goal is now a list[str]
     elif file_config.attack.goal:
         goal_list = [file_config.attack.goal]
 
@@ -792,13 +824,13 @@ def test(
     # Determine target type and create appropriate Target
     target_obj: Target
     system_prompt: str | None = None
+    parsed_headers = json.loads(headers) if headers else {}
 
     if final_target.startswith("http://") or final_target.startswith("https://"):
         # HTTP endpoint target
         console.print(
             f"[bold violet]Serix[/bold violet] Testing HTTP endpoint: {final_target}"
         )
-        parsed_headers = json.loads(headers) if headers else {}
         target_obj = HttpTarget(
             url=final_target,
             input_field=input_field,
@@ -850,6 +882,41 @@ def test(
             "  - http://... or https://... (HTTP endpoint)"
         )
         raise typer.Exit(1)
+
+    # Create test run config from CLI args (Phase 3: infrastructure)
+    test_run_config = TestRunConfig(
+        target=final_target,
+        target_id=target_id,
+        name=name,
+        dry_run=dry_run,
+        fuzz_only=fuzz_only,
+        no_report=no_report,
+        no_patch=no_patch,
+        attacker_model=attacker_model or "gpt-4o-mini",
+        judge_model=judge_model or "gpt-4o",
+        critic_model=critic_model or "gpt-4o-mini",
+        patcher_model=patcher_model or "gpt-4o",
+        analyzer_model=analyzer_model or "gpt-4o-mini",
+        exhaustive=exhaustive,
+        skip_regression=skip_regression,
+        mode=effective_mode,
+        depth=depth,
+        goals=goal_list,
+        scenarios=scenario_list,
+        fuzz_enabled=fuzz_config is not None,
+        fuzz_latency=fuzz_config.enable_latency if fuzz_config else False,
+        fuzz_errors=fuzz_config.enable_errors if fuzz_config else False,
+        fuzz_json=fuzz_config.enable_json_corruption if fuzz_config else False,
+        fuzz_probability=fuzz_probability,
+        report_path=final_report,
+        verbose=final_verbose,
+        github=github,
+        live=live,
+        yes=yes,
+        input_field=input_field,
+        output_field=output_field,
+        headers=parsed_headers,
+    )
 
     # Display goal(s) info
     if len(goal_list) == 1:
@@ -907,6 +974,10 @@ def test(
 
     # Setup target and run attacks
     target_obj.setup()
+
+    # Initialize workflow (Phase 3: infrastructure, stubs return empty result)
+    workflow = TestWorkflow(test_run_config)
+    _ = workflow.run(target_obj)
 
     # Apply fuzzing if configured
     if fuzz_config:
@@ -973,7 +1044,7 @@ def test(
     store = AttackStore()
     stored_count = store.count()
 
-    if stored_count > 0 and not no_immune:
+    if stored_count > 0 and not skip_regression:
         # Calculate actual replay count when skip_mitigated is True
         if skip_mitigated:
             attacks_to_replay = len(store.load_all(skip_mitigated=True))
@@ -1032,7 +1103,7 @@ def test(
                     # Non-interactive without --yes: fail immediately
                     raise typer.Exit(1)
                 # With --yes: continue without prompting
-    elif not no_immune:
+    elif not skip_regression:
         console.print("[dim]No stored attacks for Immune Check[/dim]")
 
     # Track results per goal for multi-goal support
@@ -1415,25 +1486,6 @@ def test(
                 )
                 console.print(f"\n[cyan]HTML Report:[/cyan] {report_path}")
 
-            # Generate JSON report if requested
-            if json_report:
-                json_path = export_json(
-                    evaluation=evaluation,
-                    adversary_result=adversary_result,
-                    target=final_target,
-                    output_path=json_report,
-                    remediations=report_remediations,
-                    serix_version=get_serix_version(),
-                    attacker_model="gpt-4o-mini",
-                    judge_model=judge_model or "gpt-4o",
-                    critic_model="gpt-4o-mini",
-                    mode=effective_mode,
-                    depth=depth,
-                    test_duration_seconds=test_duration,
-                    fuzz_settings=config_snapshot.get("fuzz_settings"),
-                )
-                console.print(f"[cyan]JSON Report:[/cyan] {json_path}")
-
             # Write GitHub outputs if requested
             if github:
                 if write_github_output(evaluation, final_target):
@@ -1494,9 +1546,9 @@ def test(
 
     if total_exploited > 0:
         console.print(f"\n[red]⚠️  {total_exploited} vulnerabilities found![/red]")
-        for goal, results in all_static_results:
+        for goal_text, results in all_static_results:
             for atk in results.successful_attacks:
-                goal_prefix = f"[{goal[:20]}...] " if len(goal_list) > 1 else ""
+                goal_prefix = f"[{goal_text[:20]}...] " if len(goal_list) > 1 else ""
                 console.print(f"  • {goal_prefix}{atk.strategy}: {atk.payload[:60]}...")
     else:
         total_attacks = sum(r.total_attempts for _, r in all_static_results)
