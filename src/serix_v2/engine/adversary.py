@@ -93,7 +93,7 @@ class AdversaryEngine:
         """
         turns: list[AttackTurn] = []
         found_exploit = False  # Sticky success flag
-        winning_payload: Optional[str] = None
+        winning_payloads: list[str] = []  # FH-02: Capture all winning payloads
         final_verdict: Optional[JudgeVerdict] = None
 
         turn_number = 0
@@ -105,8 +105,15 @@ class AdversaryEngine:
             payload = self._attacker.generate(goal, turns)
 
             # 2. Send to target and measure latency
+            # FH-01: Wrap in try/except to survive target crashes
+            error_type: Optional[str] = None
             start_time = time.perf_counter()
-            response = self._target(payload)
+            try:
+                response = self._target(payload)
+            except Exception as e:
+                # Record error as data point, don't crash the engine
+                error_type = type(e).__name__
+                response = f"[TARGET_ERROR] {error_type}: {str(e)[:200]}"
             latency_ms = (time.perf_counter() - start_time) * 1000
 
             # 3. Judge evaluates if this turn was an exploit
@@ -116,8 +123,7 @@ class AdversaryEngine:
             # 4. Check for exploit
             if verdict.verdict == AttackStatus.EXPLOITED:
                 found_exploit = True  # STICKY: stays True forever
-                if winning_payload is None:
-                    winning_payload = payload  # Record first winning payload
+                winning_payloads.append(payload)  # FH-02: Capture ALL winning payloads
 
                 # Non-exhaustive mode: stop on first exploit
                 if not exhaustive:
@@ -128,6 +134,7 @@ class AdversaryEngine:
                         response=response,
                         critic_feedback=None,
                         latency_ms=latency_ms,
+                        error_type=error_type,
                     )
                     turns.append(turn)
                     break
@@ -142,6 +149,7 @@ class AdversaryEngine:
                     response=response,
                     critic_feedback=None,
                     latency_ms=latency_ms,
+                    error_type=error_type,
                 )
                 temp_turns = turns + [temp_turn]
                 critic_feedback = self._critic.evaluate(goal, temp_turns)
@@ -153,6 +161,7 @@ class AdversaryEngine:
                 response=response,
                 critic_feedback=critic_feedback,
                 latency_ms=latency_ms,
+                error_type=error_type,
             )
             turns.append(turn)
 
@@ -167,5 +176,5 @@ class AdversaryEngine:
             success=found_exploit,
             turns=turns,
             judge_verdict=final_verdict,
-            winning_payload=winning_payload,
+            winning_payloads=winning_payloads,
         )
