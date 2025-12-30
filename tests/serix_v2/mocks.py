@@ -9,10 +9,13 @@ to script exact behavior sequences.
 """
 
 from serix_v2.core.contracts import (
+    AttackLibrary,
     AttackStatus,
     AttackTurn,
+    CampaignResult,
     CriticFeedback,
     JudgeVerdict,
+    StoredAttack,
 )
 
 
@@ -157,3 +160,83 @@ class MockCrashingTarget:
             raise self._exception_type(self._exception_message)
 
         return self._fallback_response
+
+
+class MockLLMProvider:
+    """
+    Mock implementation of the LLMProvider protocol.
+
+    Returns configurable responses in sequence.
+    """
+
+    def __init__(self, responses: list[str] | None = None):
+        self._responses = responses or [
+            '{"verdict": "defended", "confidence": 0.9, "reasoning": "Mock"}'
+        ]
+        self._call_count = 0
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float = 0.7,
+    ) -> str:
+        """Return the next response in sequence, cycling if needed."""
+        response = self._responses[self._call_count % len(self._responses)]
+        self._call_count += 1
+        return response
+
+
+class MockAttackStore:
+    """
+    Mock implementation of the AttackStore protocol.
+
+    Stores attacks in memory for testing.
+    """
+
+    def __init__(self) -> None:
+        self._libraries: dict[str, AttackLibrary] = {}
+        self._add_attack_calls: list[StoredAttack] = []
+
+    def load(self, target_id: str) -> AttackLibrary:
+        """Load attack library for a target."""
+        if target_id not in self._libraries:
+            self._libraries[target_id] = AttackLibrary(target_id=target_id, attacks=[])
+        return self._libraries[target_id]
+
+    def save(self, library: AttackLibrary) -> None:
+        """Save attack library."""
+        self._libraries[library.target_id] = library
+
+    def add_attack(self, attack: StoredAttack) -> None:
+        """Add attack to library."""
+        self._add_attack_calls.append(attack)
+        library = self.load(attack.target_id)
+        library.attacks.append(attack)
+        self.save(library)
+
+
+class MockCampaignStore:
+    """
+    Mock implementation of the CampaignStore protocol.
+
+    Stores campaign results in memory for testing.
+    """
+
+    def __init__(self) -> None:
+        self._results: dict[str, CampaignResult] = {}
+        self._save_calls: list[CampaignResult] = []
+
+    def save(self, result: CampaignResult) -> str:
+        """Save campaign result."""
+        self._save_calls.append(result)
+        key = f"{result.target_id}:{result.run_id}"
+        self._results[key] = result
+        return result.run_id
+
+    def load(self, target_id: str, run_id: str) -> CampaignResult:
+        """Load campaign result."""
+        key = f"{target_id}:{run_id}"
+        if key not in self._results:
+            raise FileNotFoundError(f"Campaign result not found: {target_id}/{run_id}")
+        return self._results[key]
