@@ -189,6 +189,10 @@ class AttackTurn(BaseModel):
     response: str  # What target returned
     critic_feedback: Optional[CriticFeedback] = None
     latency_ms: float = 0.0
+    # FH-01: Structured error tracking for report highlighting
+    # Populated with exception class name (e.g., "ValueError", "TimeoutError")
+    # None when target call succeeds
+    error_type: Optional[str] = None
 
 
 class AttackResult(BaseModel):
@@ -206,7 +210,14 @@ class AttackResult(BaseModel):
     judge_verdict: Optional[JudgeVerdict] = None
     analysis: Optional[VulnerabilityAnalysis] = None
     healing: Optional[HealingResult] = None
-    winning_payload: Optional[str] = None
+    # FH-02: Support multiple winning payloads for exhaustive mode
+    # All payloads that caused EXPLOITED verdict are captured
+    winning_payloads: list[str] = Field(default_factory=list)
+
+    @property
+    def winning_payload(self) -> Optional[str]:
+        """First winning payload (backwards compatible property)."""
+        return self.winning_payloads[0] if self.winning_payloads else None
 
 
 class ResilienceResult(BaseModel):
