@@ -114,3 +114,46 @@ class MockCritic:
             reasoning=f"Mock critic: should_continue={should_continue}",
             suggested_pivot="Try a different approach" if should_continue else None,
         )
+
+
+class MockCrashingTarget:
+    """
+    Mock target that throws exceptions on specified calls.
+
+    FH-01: Used to test engine error handling.
+    """
+
+    def __init__(
+        self,
+        target_id: str = "t_crash1234",
+        locator: str = "crash_target.py:crash_fn",
+        crash_on_calls: list[int] | None = None,
+        exception_type: type[Exception] = ValueError,
+        exception_message: str = "Target crashed!",
+        fallback_response: str = "Normal response",
+    ):
+        self._id = target_id
+        self._locator = locator
+        self._crash_on_calls = crash_on_calls or [0]  # Crash on first call by default
+        self._exception_type = exception_type
+        self._exception_message = exception_message
+        self._fallback_response = fallback_response
+        self._call_count = 0
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def locator(self) -> str:
+        return self._locator
+
+    def __call__(self, message: str) -> str:
+        """Throw exception on specified calls, return fallback otherwise."""
+        current_call = self._call_count
+        self._call_count += 1
+
+        if current_call in self._crash_on_calls:
+            raise self._exception_type(self._exception_message)
+
+        return self._fallback_response
