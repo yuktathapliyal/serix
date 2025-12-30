@@ -10,11 +10,17 @@ from serix_v2.core.contracts import AttackMode, Persona
 from serix_v2.core.protocols import Attacker, LLMProvider
 
 from .base import BaseAttacker
+from .confuser import ConfuserAttacker
+from .extractor import ExtractorAttacker
 from .jailbreaker import JailbreakerAttacker
+from .manipulator import ManipulatorAttacker
 
 __all__ = [
     "BaseAttacker",
+    "ConfuserAttacker",
+    "ExtractorAttacker",
     "JailbreakerAttacker",
+    "ManipulatorAttacker",
     "create_attacker",
 ]
 
@@ -40,11 +46,18 @@ def create_attacker(
     Raises:
         ValueError: If persona is not yet implemented.
     """
-    attacker_map = {
+    # Type: concrete attacker classes (not BaseAttacker which is abstract)
+    attacker_map: dict[
+        Persona,
+        type[JailbreakerAttacker]
+        | type[ExtractorAttacker]
+        | type[ConfuserAttacker]
+        | type[ManipulatorAttacker],
+    ] = {
         Persona.JAILBREAKER: JailbreakerAttacker,
-        # Persona.EXTRACTOR: ExtractorAttacker,  # TODO
-        # Persona.CONFUSER: ConfuserAttacker,    # TODO
-        # Persona.MANIPULATOR: ManipulatorAttacker,  # TODO
+        Persona.EXTRACTOR: ExtractorAttacker,
+        Persona.CONFUSER: ConfuserAttacker,
+        Persona.MANIPULATOR: ManipulatorAttacker,
     }
 
     attacker_cls = attacker_map.get(persona)
