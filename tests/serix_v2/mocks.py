@@ -331,3 +331,79 @@ class MockPatcher:
             recommendations=self._recommendations,
             confidence=self._confidence,
         )
+
+
+class MockSlowTarget:
+    """
+    Mock target that simulates slow responses.
+
+    Used to test timeout detection in FuzzService.
+    Phase 6: Fuzz/Resilience Testing
+    """
+
+    def __init__(
+        self,
+        target_id: str = "t_slow1234",
+        locator: str = "slow_target.py:slow_fn",
+        delay_seconds: float = 60.0,  # Longer than default timeout
+        response: str = "Slow response",
+    ):
+        self._id = target_id
+        self._locator = locator
+        self._delay_seconds = delay_seconds
+        self._response = response
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def locator(self) -> str:
+        return self._locator
+
+    def __call__(self, message: str) -> str:
+        """Sleep for configured duration, then return response."""
+        import time
+
+        time.sleep(self._delay_seconds)
+        return self._response
+
+
+class MockHTTPErrorTarget:
+    """
+    Mock target that raises HTTP-like errors.
+
+    Simulates a target whose internal HTTP client fails.
+    Used to test error resilience in FuzzService.
+    Phase 6: Fuzz/Resilience Testing
+    """
+
+    def __init__(
+        self,
+        target_id: str = "t_httperr1234",
+        locator: str = "http_error_target.py:http_fn",
+        error_code: int = 500,
+    ):
+        self._id = target_id
+        self._locator = locator
+        self._error_code = error_code
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def locator(self) -> str:
+        return self._locator
+
+    def __call__(self, message: str) -> str:
+        """Raise an HTTP-like error."""
+        import httpx
+
+        request = httpx.Request("POST", "https://api.example.com/chat")
+        response = httpx.Response(status_code=self._error_code, request=request)
+        raise httpx.HTTPStatusError(
+            f"HTTP {self._error_code}",
+            request=request,
+            response=response,
+        )
