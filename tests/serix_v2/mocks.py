@@ -14,8 +14,13 @@ from serix_v2.core.contracts import (
     AttackTurn,
     CampaignResult,
     CriticFeedback,
+    HealingPatch,
+    HealingResult,
     JudgeVerdict,
+    Severity,
     StoredAttack,
+    ToolRecommendation,
+    VulnerabilityAnalysis,
 )
 
 
@@ -240,3 +245,89 @@ class MockCampaignStore:
         if key not in self._results:
             raise FileNotFoundError(f"Campaign result not found: {target_id}/{run_id}")
         return self._results[key]
+
+
+class MockAnalyzer:
+    """
+    Mock implementation of the Analyzer protocol.
+
+    Returns configurable vulnerability analysis.
+    """
+
+    def __init__(
+        self,
+        vulnerability_type: str = "jailbreak",
+        owasp_code: str = "LLM01",
+        severity: Severity = Severity.HIGH,
+        root_cause: str = "Mock root cause",
+    ):
+        self._vulnerability_type = vulnerability_type
+        self._owasp_code = owasp_code
+        self._severity = severity
+        self._root_cause = root_cause
+        self._call_count = 0
+
+    def analyze(self, goal: str, payload: str, response: str) -> VulnerabilityAnalysis:
+        """Return configured vulnerability analysis."""
+        self._call_count += 1
+        return VulnerabilityAnalysis(
+            vulnerability_type=self._vulnerability_type,
+            owasp_code=self._owasp_code,
+            severity=self._severity,
+            root_cause=self._root_cause,
+        )
+
+
+class MockPatcher:
+    """
+    Mock implementation of the Patcher protocol.
+
+    Returns configurable healing results.
+    """
+
+    def __init__(
+        self,
+        patched_prompt: str | None = None,
+        explanation: str = "Mock patch applied",
+        confidence: float = 0.85,
+        recommendations: list[ToolRecommendation] | None = None,
+    ):
+        self._patched_prompt = patched_prompt
+        self._explanation = explanation
+        self._confidence = confidence
+        self._recommendations = recommendations or [
+            ToolRecommendation(
+                recommendation="Mock recommendation",
+                severity="recommended",
+                owasp_code="LLM01",
+            )
+        ]
+        self._call_count = 0
+
+    def heal(
+        self,
+        original_prompt: str,
+        attacks: list[tuple[str, str]],
+        analysis: VulnerabilityAnalysis,
+    ) -> HealingResult:
+        """Return configured healing result."""
+        self._call_count += 1
+
+        # If patched_prompt is provided, create a patch
+        patch = None
+        if self._patched_prompt is not None or original_prompt:
+            patched = (
+                self._patched_prompt or f"{original_prompt}\n\n[Security clause added]"
+            )
+            patch = HealingPatch(
+                original=original_prompt,
+                patched=patched,
+                diff=f"--- original\n+++ patched\n-{original_prompt[:50]}...\n+{patched[:50]}...",
+                explanation=self._explanation,
+            )
+
+        return HealingResult(
+            patch=patch,
+            recommendations=self._recommendations,
+            confidence=self._confidence,
+        )

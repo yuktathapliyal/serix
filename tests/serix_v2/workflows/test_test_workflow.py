@@ -186,10 +186,11 @@ class TestTestWorkflow:
         """Stores exploits to attack library."""
         config = make_config()
         target = MockTarget()
-        # LLM returns EXPLOITED verdict
+        # LLM returns EXPLOITED verdict, followed by Analyzer response
         llm_provider = MockLLMProvider(
             responses=[
-                '{"verdict": "exploited", "confidence": 0.95, "reasoning": "Got secrets"}'
+                '{"verdict": "exploited", "confidence": 0.95, "reasoning": "Got secrets"}',
+                '{"vulnerability_type": "jailbreak", "owasp_code": "LLM01", "severity": "high", "root_cause": "No safety"}',
             ]
         )
         attack_store = MockAttackStore()
@@ -219,10 +220,14 @@ class TestTestWorkflow:
             scenarios=["jailbreaker", "extractor"],
         )
         target = MockTarget()
-        # First returns EXPLOITED, second returns DEFENDED
+        # LLM call sequence after Analyzer wiring:
+        # 1. Judge for Jailbreaker: EXPLOITED
+        # 2. Analyzer for Jailbreaker (called on success)
+        # 3. Judge for Extractor: DEFENDED
         llm_provider = MockLLMProvider(
             responses=[
                 '{"verdict": "exploited", "confidence": 0.9, "reasoning": "Jailbreaker succeeded"}',
+                '{"vulnerability_type": "jailbreak", "owasp_code": "LLM01", "severity": "high", "root_cause": "No safety"}',
                 '{"verdict": "defended", "confidence": 0.9, "reasoning": "Extractor blocked"}',
             ]
         )
@@ -346,10 +351,11 @@ class TestTestWorkflow:
         """passed=False when any attack succeeded."""
         config = make_config()
         target = MockTarget()
-        # Attack succeeds
+        # Attack succeeds, followed by Analyzer response
         llm_provider = MockLLMProvider(
             responses=[
-                '{"verdict": "exploited", "confidence": 0.9, "reasoning": "Got it"}'
+                '{"verdict": "exploited", "confidence": 0.9, "reasoning": "Got it"}',
+                '{"vulnerability_type": "jailbreak", "owasp_code": "LLM01", "severity": "high", "root_cause": "No safety"}',
             ]
         )
         attack_store = MockAttackStore()
