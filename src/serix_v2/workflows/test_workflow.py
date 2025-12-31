@@ -2,12 +2,12 @@
 Serix v2 - Test Workflow
 
 Orchestrates the complete test campaign:
-1. Regression phase (replay previous attacks) - STUB
+1. Regression phase (replay previous attacks)
 2. Security testing phase (new attacks)
 3. Fuzz phase (resilience tests) - STUB
 4. Save results and update indexes
 
-Reference: Phase 3B
+Reference: Phase 3B, Phase 5
 """
 
 import time
@@ -37,6 +37,7 @@ from serix_v2.providers.attackers import create_attacker
 from serix_v2.providers.critic import LLMCritic
 from serix_v2.providers.judge import LLMJudge
 from serix_v2.providers.patcher import LLMPatcher
+from serix_v2.services.regression import RegressionService
 
 
 class TestWorkflow:
@@ -46,7 +47,7 @@ class TestWorkflow:
     The workflow:
     1. Generates IDs (target_id, run_id)
     2. Loads existing attack library
-    3. Runs regression phase (replay previous attacks) - STUB
+    3. Runs regression phase (replay previous attacks via RegressionService)
     4. Runs security testing phase (new attacks with personas)
     5. Runs fuzz phase (resilience tests) - STUB
     6. Calculates security score
@@ -57,6 +58,7 @@ class TestWorkflow:
     - Law 2: No typer/rich/click imports
     - Law 3: Depends on protocols (Target, AttackStore, CampaignStore, LLMProvider)
     - Law 5: All config flags map to code branches
+    - Law 8: All CampaignResult fields are populated (regression_* via RegressionService)
     """
 
     def __init__(
@@ -105,16 +107,36 @@ class TestWorkflow:
         # Step 3: Load attack library
         library = self._attack_store.load(target_id)
 
-        # Step 4: Regression phase (STUB - Phase 4+ work)
+        # Step 4: Regression phase (Phase 5 - Immune Check)
         regression_ran = False
         regression_replayed = 0
         regression_still_exploited = 0
         regression_now_defended = 0
 
-        if self._config.should_run_regression():
-            # STUB: Just mark that we checked
+        if self._config.should_run_regression() and library.attacks:
             regression_ran = True
-            # TODO: Implement actual regression replay in Phase 4+
+
+            # Create judge for regression evaluation
+            judge = LLMJudge(
+                llm_provider=self._llm_provider,
+                model=self._config.judge_model,
+            )
+
+            # Create and run regression service
+            regression_service = RegressionService(
+                judge=judge,
+                target=self._target,
+            )
+
+            regression_result = regression_service.run(
+                library=library,
+                skip_mitigated=self._config.skip_mitigated,
+            )
+
+            # Extract results for CampaignResult (Law 8: Contract Fulfillment)
+            regression_replayed = regression_result.replayed
+            regression_still_exploited = regression_result.still_exploited
+            regression_now_defended = regression_result.now_defended
 
         # Step 5: Security testing phase
         attacks: list[AttackResult] = []
