@@ -10,6 +10,7 @@ from serix_v2.core.contracts import (
     CampaignResult,
     Grade,
     Persona,
+    ResilienceResult,
     SecurityScore,
 )
 from serix_v2.workflows import TestWorkflow
@@ -399,3 +400,98 @@ class TestTestWorkflow:
             from serix_v2.core.contracts import AttackResult
 
             assert isinstance(attack, AttackResult)
+
+
+class TestTestWorkflowFuzzIntegration:
+    """
+    Tests for fuzz phase integration.
+
+    Phase 6: Fuzz/Resilience Testing
+    """
+
+    def test_fuzz_results_in_campaign_result(self):
+        """Fuzz results appear in CampaignResult.resilience."""
+        config = make_config(
+            fuzz=True,
+            fuzz_latency=0.01,  # Fast test
+        )
+        target = MockTarget()
+        llm_provider = MockLLMProvider()
+        attack_store = MockAttackStore()
+        campaign_store = MockCampaignStore()
+
+        workflow = TestWorkflow(
+            config=config,
+            target=target,
+            llm_provider=llm_provider,
+            attack_store=attack_store,
+            campaign_store=campaign_store,
+        )
+
+        result = workflow.run()
+
+        # Should have 5 resilience results (latency + 3 errors + json)
+        assert len(result.resilience) == 5
+        assert all(isinstance(r, ResilienceResult) for r in result.resilience)
+
+        # Verify test types
+        test_types = {r.test_type for r in result.resilience}
+        assert test_types == {
+            "latency",
+            "http_500",
+            "http_503",
+            "http_429",
+            "json_corruption",
+        }
+
+    def test_fuzz_only_skips_attacks_runs_fuzz(self):
+        """--fuzz-only skips security tests but runs fuzz."""
+        config = make_config(
+            fuzz_only=True,
+            fuzz=True,
+            fuzz_latency=0.01,  # Fast test
+        )
+        target = MockTarget()
+        llm_provider = MockLLMProvider()
+        attack_store = MockAttackStore()
+        campaign_store = MockCampaignStore()
+
+        workflow = TestWorkflow(
+            config=config,
+            target=target,
+            llm_provider=llm_provider,
+            attack_store=attack_store,
+            campaign_store=campaign_store,
+        )
+
+        result = workflow.run()
+
+        # No attacks (fuzz_only)
+        assert len(result.attacks) == 0
+        # But has resilience results
+        assert len(result.resilience) == 5
+
+    def test_no_fuzz_results_when_fuzz_disabled(self):
+        """No resilience results when fuzz is disabled."""
+        config = make_config(
+            fuzz=False,
+            fuzz_latency=None,
+            fuzz_errors=False,
+            fuzz_json=False,
+        )
+        target = MockTarget()
+        llm_provider = MockLLMProvider()
+        attack_store = MockAttackStore()
+        campaign_store = MockCampaignStore()
+
+        workflow = TestWorkflow(
+            config=config,
+            target=target,
+            llm_provider=llm_provider,
+            attack_store=attack_store,
+            campaign_store=campaign_store,
+        )
+
+        result = workflow.run()
+
+        assert len(result.resilience) == 0
