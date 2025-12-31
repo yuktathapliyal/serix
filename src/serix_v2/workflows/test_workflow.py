@@ -19,6 +19,7 @@ from serix_v2.core.contracts import (
     AttackMode,
     AttackResult,
     AttackStatus,
+    AttackTurn,
     CampaignResult,
     Grade,
     Persona,
@@ -31,9 +32,11 @@ from serix_v2.core.contracts import (
 from serix_v2.core.id_gen import generate_attack_id, generate_run_id, generate_target_id
 from serix_v2.core.protocols import AttackStore, CampaignStore, LLMProvider, Target
 from serix_v2.engine.adversary import AdversaryEngine
+from serix_v2.providers.analyzer import LLMAnalyzer
 from serix_v2.providers.attackers import create_attacker
 from serix_v2.providers.critic import LLMCritic
 from serix_v2.providers.judge import LLMJudge
+from serix_v2.providers.patcher import LLMPatcher
 
 
 class TestWorkflow:
@@ -158,6 +161,45 @@ class TestWorkflow:
                         mode=self._config.mode,
                         persona=persona,
                     )
+
+                    # Populate analysis and healing for successful attacks
+                    # This fulfills Law 8: Contract Fulfillment (every field must have population path)
+                    if result.success and result.winning_payloads:
+                        # Run Analyzer (use first winning payload for classification)
+                        analyzer = LLMAnalyzer(
+                            llm_provider=self._llm_provider,
+                            model=self._config.analyzer_model,
+                        )
+                        first_payload = result.winning_payloads[0]
+                        first_response = self._find_response_for_payload(
+                            result.turns, first_payload
+                        )
+
+                        result.analysis = analyzer.analyze(
+                            goal=goal,
+                            payload=first_payload,
+                            response=first_response,
+                        )
+
+                        # Run Patcher if config allows
+                        if self._config.should_generate_patch():
+                            patcher = LLMPatcher(
+                                llm_provider=self._llm_provider,
+                                model=self._config.patcher_model,
+                            )
+
+                            # Pass ALL winning payloads (exhaustive mode support)
+                            # Limit to 5 to avoid token overflow
+                            all_attacks = [
+                                (p, self._find_response_for_payload(result.turns, p))
+                                for p in result.winning_payloads[:5]
+                            ]
+
+                            result.healing = patcher.heal(
+                                original_prompt=self._config.system_prompt or "",
+                                attacks=all_attacks,
+                                analysis=result.analysis,
+                            )
 
                     # Store successful attacks
                     if result.success and result.winning_payloads:
@@ -319,3 +361,22 @@ class TestWorkflow:
         index.aliases[target_name] = target_id
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(index.model_dump_json(indent=2))
+
+    def _find_response_for_payload(self, turns: list[AttackTurn], payload: str) -> str:
+        """
+        Find the target response for a given attack payload.
+
+        Used to pair payloads with their responses for analysis/patching.
+
+        Args:
+            turns: List of attack turns from the engine.
+            payload: The attack payload to find.
+
+        Returns:
+            The corresponding target response, or last turn's response as fallback.
+        """
+        for turn in turns:
+            if turn.payload == payload:
+                return turn.response
+        # Fallback: return last turn's response
+        return turns[-1].response if turns else ""
