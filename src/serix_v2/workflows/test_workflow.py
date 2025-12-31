@@ -4,10 +4,10 @@ Serix v2 - Test Workflow
 Orchestrates the complete test campaign:
 1. Regression phase (replay previous attacks)
 2. Security testing phase (new attacks)
-3. Fuzz phase (resilience tests) - STUB
+3. Fuzz phase (resilience tests)
 4. Save results and update indexes
 
-Reference: Phase 3B, Phase 5
+Reference: Phase 3B, Phase 5, Phase 6
 """
 
 import time
@@ -23,6 +23,7 @@ from serix_v2.core.contracts import (
     CampaignResult,
     Grade,
     Persona,
+    ResilienceResult,
     ScoreAxis,
     SecurityScore,
     StoredAttack,
@@ -37,6 +38,7 @@ from serix_v2.providers.attackers import create_attacker
 from serix_v2.providers.critic import LLMCritic
 from serix_v2.providers.judge import LLMJudge
 from serix_v2.providers.patcher import LLMPatcher
+from serix_v2.services.fuzz import FuzzService
 from serix_v2.services.regression import RegressionService
 
 
@@ -49,7 +51,7 @@ class TestWorkflow:
     2. Loads existing attack library
     3. Runs regression phase (replay previous attacks via RegressionService)
     4. Runs security testing phase (new attacks with personas)
-    5. Runs fuzz phase (resilience tests) - STUB
+    5. Runs fuzz phase (resilience tests via FuzzService)
     6. Calculates security score
     7. Saves results if not dry_run
 
@@ -58,7 +60,7 @@ class TestWorkflow:
     - Law 2: No typer/rich/click imports
     - Law 3: Depends on protocols (Target, AttackStore, CampaignStore, LLMProvider)
     - Law 5: All config flags map to code branches
-    - Law 8: All CampaignResult fields are populated (regression_* via RegressionService)
+    - Law 8: All CampaignResult fields are populated (regression_*, resilience)
     """
 
     def __init__(
@@ -243,10 +245,15 @@ class TestWorkflow:
 
                     attacks.append(result)
 
-        # Step 6: Fuzz phase (STUB - Phase 4 work)
+        # Step 6: Fuzz phase (Phase 6)
+        resilience_results: list[ResilienceResult] = []
+
         if self._config.should_run_fuzz_tests():
-            # STUB: Skip for now
-            pass
+            fuzz_service = FuzzService(
+                target=self._target,
+                config=self._config,
+            )
+            resilience_results = fuzz_service.run()
 
         # Step 7: Calculate score
         score = self._calculate_score(attacks)
@@ -268,6 +275,7 @@ class TestWorkflow:
             duration_seconds=duration_seconds,
             score=score,
             attacks=attacks,
+            resilience=resilience_results,
             regression_ran=regression_ran,
             regression_replayed=regression_replayed,
             regression_still_exploited=regression_still_exploited,
