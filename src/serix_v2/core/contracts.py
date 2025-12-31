@@ -150,6 +150,68 @@ class HealingResult(BaseModel):
 
 
 # ============================================================================
+# REGRESSION (Phase 5 - Immune Check)
+# ============================================================================
+
+
+class AttackTransition(BaseModel):
+    """
+    Tracks a single attack's state transition during regression check.
+
+    The "Delta" that CISOs care about:
+    - "Last run: Exploited. This run: Defended" = Fixed!
+    - "Last run: Defended. This run: Exploited" = Regression!
+    """
+
+    attack_id: str
+    goal: str
+    strategy_id: str
+    payload: str
+    previous_status: AttackStatus
+    current_status: AttackStatus
+
+    @property
+    def is_regression(self) -> bool:
+        """True if previously defended but now exploited."""
+        return (
+            self.previous_status == AttackStatus.DEFENDED
+            and self.current_status == AttackStatus.EXPLOITED
+        )
+
+    @property
+    def is_fixed(self) -> bool:
+        """True if previously exploited but now defended."""
+        return (
+            self.previous_status == AttackStatus.EXPLOITED
+            and self.current_status == AttackStatus.DEFENDED
+        )
+
+
+class RegressionResult(BaseModel):
+    """
+    Complete result of a regression check.
+
+    Founder's Tip: Focus on the DELTA - Before vs. After.
+    """
+
+    replayed: int = 0
+    still_exploited: int = 0
+    now_defended: int = 0
+    regressions: int = 0
+    transitions: list[AttackTransition] = Field(default_factory=list)
+
+    @property
+    def has_regressions(self) -> bool:
+        """True if any previously defended attacks are now exploited."""
+        return self.regressions > 0
+
+    @property
+    def all_fixed(self) -> bool:
+        """True if all replayed attacks are now defended."""
+        return self.still_exploited == 0 and self.replayed > 0
+
+
+# ============================================================================
 # SCORING (Evaluator output)
 # ============================================================================
 
