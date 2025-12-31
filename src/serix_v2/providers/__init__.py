@@ -27,6 +27,9 @@ from serix_v2.providers.critic import LLMCritic
 # Evaluators
 from serix_v2.providers.judge import LLMJudge
 from serix_v2.providers.llm.litellm_provider import LiteLLMProvider
+
+# Patcher
+from serix_v2.providers.patcher import LLMPatcher
 from serix_v2.providers.utils import extract_json_payload
 
 __all__ = [
@@ -45,4 +48,6 @@ __all__ = [
     "LLMJudge",
     "LLMCritic",
     "LLMAnalyzer",
+    # Patcher
+    "LLMPatcher",
 ]
