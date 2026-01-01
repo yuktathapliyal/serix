@@ -66,6 +66,12 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/serix"]
 
+[tool.pytest.ini_options]
+markers = [
+    "e2e: end-to-end tests with mocked LLM responses",
+    "real_api: tests that make real OpenAI API calls (requires OPENAI_API_KEY)",
+]
+
 [tool.isort]
 profile = "black"
 
