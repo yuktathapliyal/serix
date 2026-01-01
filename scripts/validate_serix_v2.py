@@ -216,8 +216,8 @@ def run_validation(temp_dir: Path) -> None:
             print(f"  {r.test_type}: {status_color}{status_icon}{reset}")
             if r.latency_ms:
                 print(f"    Latency: {r.latency_ms:.1f}ms")
-            if r.error_message:
-                print(f"    Error: {r.error_message}")
+            if r.details:
+                print(f"    Details: {r.details}")
     else:
         print("  (No fuzz tests ran)")
 
@@ -235,10 +235,10 @@ def run_validation(temp_dir: Path) -> None:
 
     # Security score
     if result.score:
-        print(f"\n  Security Grade: {result.score.overall_grade.value}")
-        print(f"  Security Score: {result.score.overall_score:.1%}")
+        print(f"\n  Security Grade: {result.score.grade.value}")
+        print(f"  Security Score: {result.score.overall_score}/100")
         for axis in result.score.axes:
-            print(f"    {axis.persona.value}: {axis.defended}/{axis.total} defended")
+            print(f"    {axis.name}: {axis.score}/100 - {axis.verdict}")
 
     # Law 8 verification
     print("\n  Law 8 Contract Fulfillment:")
