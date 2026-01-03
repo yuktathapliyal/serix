@@ -31,6 +31,7 @@ from .contracts import (  # Enums; Model outputs; Scoring; Execution units; Stor
     ToolRecommendation,
     VulnerabilityAnalysis,
 )
+from .errors import ConfigParseError, ConfigValidationError, SerixError
 from .id_gen import generate_attack_id, generate_run_id, generate_target_id
 
 __all__ = [
@@ -38,6 +39,10 @@ __all__ = [
     "APP_NAME",
     "APP_DIR",
     "CONFIG_FILENAME",
+    # Errors
+    "SerixError",
+    "ConfigParseError",
+    "ConfigValidationError",
     # Enums
     "AttackStatus",
     "AttackMode",
