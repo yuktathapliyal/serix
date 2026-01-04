@@ -339,6 +339,46 @@ body {
 .exploit-severity.medium { background: rgba(245, 158, 11, 0.2); color: var(--severity-medium); }
 .exploit-severity.low { background: rgba(59, 130, 246, 0.2); color: var(--severity-low); }
 
+/* Phase 11: Regression transition type badges */
+.transition-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.transition-badge.regression {
+    background: rgba(239, 68, 68, 0.3);
+    color: var(--severity-critical);
+    animation: pulse-alarm 2s ease-in-out infinite;
+}
+.transition-badge.still_exploited {
+    background: rgba(249, 115, 22, 0.2);
+    color: var(--severity-high);
+}
+.transition-badge.fixed {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--color-success);
+}
+
+@keyframes pulse-alarm {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.regression-verdict {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.regression-verdict p {
+    margin: 0.25rem 0;
+}
+
 .exploit-info {
     flex: 1;
 }
@@ -997,6 +1037,50 @@ details .details-content {
         <!-- TAB 4: RESILIENCE & CONFIG -->
         <section id="config" class="tab-section">
             <h2 class="section-title">Resilience & Configuration</h2>
+
+            {% if report.regression.ran and report.regression.transitions %}
+            <!-- Phase 11: Regression Analysis Section -->
+            <div class="card">
+                <h3 class="card-title">Regression Analysis</h3>
+                <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                    Showing {{ report.regression.transitions | length }} security-relevant transition(s).
+                    <strong>REGRESSION</strong> = previously defended, now exploited (requires immediate attention).
+                </p>
+
+                {% for transition in report.regression.transitions %}
+                <details {% if transition.transition_type in ['regression', 'still_exploited'] %}open{% endif %}>
+                    <summary>
+                        <span class="transition-badge {{ transition.transition_type }}">
+                            {{ transition.transition_type | replace('_', ' ') }}
+                        </span>
+                        <span style="margin-left: 0.5rem;">{{ transition.strategy }} - "{{ transition.goal }}"</span>
+                        <span style="margin-left: auto; color: var(--text-secondary);">
+                            {{ transition.previous_status }} → {{ transition.current_status }}
+                        </span>
+                    </summary>
+                    <div class="details-content">
+                        <!-- Judge verdict metadata -->
+                        <div class="regression-verdict">
+                            <p><strong>Judge Verdict:</strong> {{ transition.verdict_reasoning }}</p>
+                            <p><strong>Confidence:</strong> {{ (transition.verdict_confidence * 100) | int }}%</p>
+                        </div>
+
+                        <!-- Conversation-style replay -->
+                        <div class="conversation">
+                            <div class="message attacker">
+                                <div class="message-role">Attack Payload (Replayed)</div>
+                                <div class="message-content">{{ transition.payload }}</div>
+                            </div>
+                            <div class="message target">
+                                <div class="message-role">Target Response</div>
+                                <div class="message-content">{{ transition.response }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             {% if report.resilience %}
             <!-- Resilience Tests Table -->
