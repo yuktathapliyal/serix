@@ -19,6 +19,7 @@ from serix_v2.core.contracts import (
     AttackMode,
     AttackResult,
     AttackStatus,
+    AttackTransition,
     AttackTurn,
     CampaignResult,
     Grade,
@@ -28,6 +29,7 @@ from serix_v2.core.contracts import (
     SecurityScore,
     StoredAttack,
     TargetIndex,
+    TargetMetadata,
     TargetType,
 )
 from serix_v2.core.id_gen import generate_attack_id, generate_run_id, generate_target_id
@@ -114,6 +116,7 @@ class TestWorkflow:
         regression_replayed = 0
         regression_still_exploited = 0
         regression_now_defended = 0
+        regression_transitions: list[AttackTransition] = []
 
         if self._config.should_run_regression() and library.attacks:
             regression_ran = True
@@ -139,6 +142,7 @@ class TestWorkflow:
             regression_replayed = regression_result.replayed
             regression_still_exploited = regression_result.still_exploited
             regression_now_defended = regression_result.now_defended
+            regression_transitions = regression_result.transitions  # Phase 11
 
         # Step 5: Security testing phase
         attacks: list[AttackResult] = []
@@ -280,6 +284,7 @@ class TestWorkflow:
             regression_replayed=regression_replayed,
             regression_still_exploited=regression_still_exploited,
             regression_now_defended=regression_now_defended,
+            regression_transitions=regression_transitions,
         )
 
         # Step 10: Save results (if not dry_run)
@@ -288,7 +293,12 @@ class TestWorkflow:
             # the current library state before saving to avoid overwriting
             current_library = self._attack_store.load(target_id)
             self._attack_store.save(current_library)
-            self._campaign_store.save(campaign_result)
+
+            # Save campaign result with optional artifacts (patch.diff, metadata.json)
+            self._campaign_store.save(campaign_result, config=self._config)
+
+            # Save target metadata (only on first run for this target)
+            self._save_target_metadata(target_id)
 
             # Update alias index if target_name provided
             if self._config.target_name:
@@ -394,6 +404,31 @@ class TestWorkflow:
         index.aliases[target_name] = target_id
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(index.model_dump_json(indent=2))
+
+    def _save_target_metadata(self, target_id: str) -> None:
+        """
+        Save target metadata if it doesn't exist.
+
+        Only creates metadata.json on first run for a target.
+        Subsequent runs skip this to avoid overwriting.
+
+        Args:
+            target_id: The target identifier
+        """
+        metadata_path = self._base_dir / "targets" / target_id / "metadata.json"
+
+        if metadata_path.exists():
+            return  # Already exists, don't overwrite
+
+        metadata = TargetMetadata(
+            target_id=target_id,
+            target_type=self._infer_target_type(),
+            locator=self._config.target_path,
+            name=self._config.target_name,
+        )
+
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(metadata.model_dump_json(indent=2))
 
     def _find_response_for_payload(self, turns: list[AttackTurn], payload: str) -> str:
         """
