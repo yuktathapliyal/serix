@@ -17,12 +17,17 @@ from serix_v2.services.chaos import (
 )
 from serix_v2.services.fuzz import FuzzService
 from serix_v2.services.regression import RegressionService
+from serix_v2.services.status import StatusService, StatusSummary, TargetStatus
 
 __all__ = [
     # Deterministic fuzz testing (serix test --fuzz)
     "FuzzService",
     # Regression service
     "RegressionService",
+    # Status query service (serix status)
+    "StatusService",
+    "StatusSummary",
+    "TargetStatus",
     # Probabilistic chaos injection (serix dev --fuzz)
     "ChaosConfig",
     "ChaosError",
