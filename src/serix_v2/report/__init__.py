@@ -4,6 +4,7 @@ Serix v2 - Report Module
 Provides:
 - JSON report schema and transformation (Phase 9A)
 - HTML report generation (Phase 10A)
+- GitHub Actions output (Phase 10B)
 
 This module is consumed by:
 - CLI commands (serix test --report)
@@ -11,6 +12,12 @@ This module is consumed by:
 - External tools and CI/CD pipelines
 """
 
+from .github import (
+    GitHubOutput,
+    GitHubOutputFormatter,
+    is_github_actions,
+    write_github_output,
+)
 from .html import (
     HTMLReportGenerator,
     escape_html,
@@ -31,6 +38,7 @@ from .schema import (
     PersonaResultInfo,
     RecommendationInfo,
     RegressionInfo,
+    RegressionTransitionInfo,
     ResilienceInfo,
     SummaryInfo,
     TargetInfo,
@@ -50,6 +58,7 @@ __all__ = [
     "RecommendationInfo",
     "HealingInfo",
     "RegressionInfo",
+    "RegressionTransitionInfo",
     "ResilienceInfo",
     "JSONReportSchema",
     # Transform function
@@ -57,6 +66,11 @@ __all__ = [
     # HTML Report (Phase 10A)
     "HTMLReportGenerator",
     "write_html_report",
+    # GitHub Actions Output (Phase 10B)
+    "GitHubOutput",
+    "GitHubOutputFormatter",
+    "write_github_output",
+    "is_github_actions",
     # Jinja2 Filters (exposed for custom templates)
     "get_score_color",
     "get_severity_color",
