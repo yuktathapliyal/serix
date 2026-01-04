@@ -106,13 +106,20 @@ class RegressionService:
         Conservative Exception Handling:
         Target crash = DEFENDED (can't exploit a crashed agent)
 
+        Phase 11: Now captures response + verdict for transcript display.
+
         Args:
             attack: The stored attack to replay
 
         Returns:
-            AttackTransition with before/after status
+            AttackTransition with before/after status and evidence
         """
         previous_status = attack.status
+
+        # Phase 11: Initialize evidence capture variables
+        response: str | None = None
+        verdict_reasoning: str | None = None
+        verdict_confidence: float | None = None
 
         try:
             response = self._target(attack.payload)
@@ -122,9 +129,15 @@ class RegressionService:
                 response=response,
             )
             current_status = verdict.verdict
+            # Phase 11: Capture verdict details for report
+            verdict_reasoning = verdict.reasoning
+            verdict_confidence = verdict.confidence
         except Exception:
             # Conservative: crashed target = defended
             current_status = AttackStatus.DEFENDED
+            response = "[Target crashed during replay]"
+            verdict_reasoning = "Target threw exception during replay"
+            verdict_confidence = 1.0  # Certain it's defended
 
         return AttackTransition(
             attack_id=attack.id,
@@ -133,4 +146,8 @@ class RegressionService:
             payload=attack.payload,
             previous_status=previous_status,
             current_status=current_status,
+            # Phase 11: Include evidence
+            response=response,
+            verdict_reasoning=verdict_reasoning,
+            verdict_confidence=verdict_confidence,
         )
