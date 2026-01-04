@@ -161,6 +161,8 @@ class AttackTransition(BaseModel):
     The "Delta" that CISOs care about:
     - "Last run: Exploited. This run: Defended" = Fixed!
     - "Last run: Defended. This run: Exploited" = Regression!
+
+    Phase 11: Added response + verdict fields for transcript capture.
     """
 
     attack_id: str
@@ -169,6 +171,19 @@ class AttackTransition(BaseModel):
     payload: str
     previous_status: AttackStatus
     current_status: AttackStatus
+
+    # Phase 11: Capture evidence for report transparency
+    response: Optional[str] = None  # Target's response during replay
+    verdict_reasoning: Optional[str] = None  # Judge's explanation
+    verdict_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    @property
+    def is_still_defended(self) -> bool:
+        """True if defended both times (no security delta - not interesting)."""
+        return (
+            self.previous_status == AttackStatus.DEFENDED
+            and self.current_status == AttackStatus.DEFENDED
+        )
 
     @property
     def is_regression(self) -> bool:
@@ -334,6 +349,7 @@ class CampaignResult(BaseModel):
     regression_replayed: int = 0
     regression_still_exploited: int = 0
     regression_now_defended: int = 0
+    regression_transitions: list[AttackTransition] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -407,3 +423,42 @@ class TargetIndex(BaseModel):
 
     schema_version: int = 1
     aliases: dict[str, str] = Field(default_factory=dict)  # alias -> target_id
+
+
+# ============================================================================
+# CAMPAIGN RUN METADATA (For run config persistence - Spec 1.3)
+# ============================================================================
+
+
+class CampaignRunMetadata(BaseModel):
+    """
+    Run configuration saved alongside campaign results.
+
+    Stored at: .serix/targets/<target_id>/campaigns/<run_id>/metadata.json
+
+    This captures the meaningful test parameters for audit and reproducibility.
+    """
+
+    schema_version: int = 1
+    run_id: str
+    target_id: str
+    serix_version: str = "0.3.0"
+    timestamp: datetime = Field(default_factory=_utc_now)
+
+    # Test configuration
+    mode: AttackMode
+    depth: int
+    goals: list[str]
+    scenarios: list[str]
+
+    # Models used
+    attacker_model: str
+    judge_model: str
+    critic_model: Optional[str] = None
+    patcher_model: Optional[str] = None
+    analyzer_model: Optional[str] = None
+
+    # Behavioral flags
+    exhaustive: bool = False
+    skip_regression: bool = False
+    fuzz_enabled: bool = False
