@@ -115,6 +115,31 @@ class HealingInfo(BaseModel):
     recommendations: list[RecommendationInfo] = Field(default_factory=list)
 
 
+class RegressionTransitionInfo(BaseModel):
+    """
+    Single regression transition for report display.
+
+    Phase 11: Captures replay evidence for debugging.
+
+    Filtered to only show interesting transitions:
+    - REGRESSION: previously defended, now exploited (ALARM)
+    - FIXED: previously exploited, now defended (IMPROVEMENT)
+    - STILL_EXPLOITED: still vulnerable (ONGOING ISSUE)
+
+    STILL_DEFENDED transitions are filtered out (no security value).
+    """
+
+    transition_type: str  # "regression", "fixed", "still_exploited"
+    goal: str
+    strategy: str  # Persona name (e.g., "jailbreaker")
+    payload: str
+    response: str  # Target's response during replay
+    verdict_reasoning: str  # Judge's explanation
+    verdict_confidence: float  # 0.0-1.0
+    previous_status: str  # "exploited" or "defended"
+    current_status: str  # "exploited" or "defended"
+
+
 class RegressionInfo(BaseModel):
     """Regression check results."""
 
@@ -122,6 +147,7 @@ class RegressionInfo(BaseModel):
     total_replayed: int
     still_exploited: int
     now_defended: int
+    transitions: list[RegressionTransitionInfo] = Field(default_factory=list)
 
 
 class ResilienceInfo(BaseModel):
@@ -292,6 +318,53 @@ def _transform_resilience(campaign: CampaignResult) -> list[ResilienceInfo]:
     ]
 
 
+def _transform_regression_transitions(
+    campaign: CampaignResult,
+) -> list[RegressionTransitionInfo]:
+    """
+    Transform AttackTransition list to RegressionTransitionInfo list.
+
+    Phase 11: Filters out STILL_DEFENDED (no security value).
+    Classifies transitions into: regression, fixed, still_exploited.
+
+    Args:
+        campaign: Campaign result containing regression transitions
+
+    Returns:
+        Filtered and transformed list for report display
+    """
+    result: list[RegressionTransitionInfo] = []
+
+    for t in campaign.regression_transitions:
+        # Filter: Skip STILL_DEFENDED (defended→defended has no security value)
+        if t.is_still_defended:
+            continue
+
+        # Classify transition type for styling
+        if t.is_regression:
+            transition_type = "regression"  # ALARM: defended→exploited
+        elif t.is_fixed:
+            transition_type = "fixed"  # IMPROVEMENT: exploited→defended
+        else:
+            transition_type = "still_exploited"  # ONGOING: exploited→exploited
+
+        result.append(
+            RegressionTransitionInfo(
+                transition_type=transition_type,
+                goal=t.goal,
+                strategy=t.strategy_id,
+                payload=t.payload,
+                response=t.response or "[No response captured]",
+                verdict_reasoning=t.verdict_reasoning or "[No reasoning provided]",
+                verdict_confidence=t.verdict_confidence or 0.0,
+                previous_status=t.previous_status.value,
+                current_status=t.current_status.value,
+            )
+        )
+
+    return result
+
+
 def _build_config_info(config: SerixSessionConfig) -> ConfigInfo:
     """
     Build ConfigInfo from SerixSessionConfig.
@@ -366,6 +439,7 @@ def transform_campaign_result(
             total_replayed=campaign.regression_replayed,
             still_exploited=campaign.regression_still_exploited,
             now_defended=campaign.regression_now_defended,
+            transitions=_transform_regression_transitions(campaign),
         ),
         resilience=_transform_resilience(campaign),
     )
