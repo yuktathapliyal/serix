@@ -9,7 +9,8 @@ The engine ONLY depends on these protocols, never concrete classes.
 Reference: Developer Checklist, Law 3
 """
 
-from typing import Protocol, runtime_checkable
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from .contracts import (
     AttackLibrary,
@@ -21,6 +22,9 @@ from .contracts import (
     StoredAttack,
     VulnerabilityAnalysis,
 )
+
+if TYPE_CHECKING:
+    from .config import SerixSessionConfig
 
 # ============================================================================
 # TARGET PROTOCOL
@@ -197,12 +201,33 @@ class AttackStore(Protocol):
 class CampaignStore(Protocol):
     """
     Protocol for campaign result persistence.
+
+    Saves campaign results and optional artifacts (patch.diff, metadata.json).
     """
 
-    def save(self, result: CampaignResult) -> str:
-        """Save campaign result and return the run_id."""
+    def save(
+        self,
+        result: CampaignResult,
+        config: Optional["SerixSessionConfig"] = None,
+    ) -> str:
+        """
+        Save campaign result and return the run_id.
+
+        If config is provided, also saves:
+        - patch.diff (aggregated healing patches, if any)
+        - metadata.json (run configuration)
+        """
         ...
 
     def load(self, target_id: str, run_id: str) -> CampaignResult:
         """Load a specific campaign result."""
+        ...
+
+    def save_report(
+        self,
+        target_id: str,
+        run_id: str,
+        report_path: Path,
+    ) -> Path:
+        """Copy HTML report to campaign directory and return destination path."""
         ...
