@@ -111,6 +111,7 @@ class HealingInfo(BaseModel):
 
     generated: bool
     diff_text: Optional[str] = None  # Actual diff content, not file path
+    patched_text: Optional[str] = None  # Full patched prompt for instant copy
     recommendations: list[RecommendationInfo] = Field(default_factory=list)
 
 
@@ -240,10 +241,12 @@ def _aggregate_healing(attacks: list[AttackResult]) -> HealingInfo:
 
     - generated: True if any attack has healing
     - diff_text: First available diff (or None)
+    - patched_text: Full patched prompt for instant copy
     - recommendations: Deduplicated by OWASP code
     """
     generated = False
     diff_text: Optional[str] = None
+    patched_text: Optional[str] = None
     seen_owasp: set[Optional[str]] = set()
     recommendations: list[RecommendationInfo] = []
 
@@ -251,9 +254,10 @@ def _aggregate_healing(attacks: list[AttackResult]) -> HealingInfo:
         if attack.healing:
             generated = True
 
-            # Take first available diff
+            # Take first available diff and patched text
             if diff_text is None and attack.healing.patch:
                 diff_text = attack.healing.patch.diff
+                patched_text = attack.healing.patch.patched
 
             # Deduplicate recommendations by OWASP code
             for rec in attack.healing.recommendations:
@@ -270,6 +274,7 @@ def _aggregate_healing(attacks: list[AttackResult]) -> HealingInfo:
     return HealingInfo(
         generated=generated,
         diff_text=diff_text,
+        patched_text=patched_text,
         recommendations=recommendations,
     )
 

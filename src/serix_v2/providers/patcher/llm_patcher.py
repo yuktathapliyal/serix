@@ -26,39 +26,42 @@ from ..utils import extract_json_payload
 
 PATCHER_SYSTEM_PROMPT = """You are a security expert specializing in AI agent hardening.
 
-Your task is to patch system prompts with MINIMAL changes to fix vulnerabilities.
+Your task is to FIX vulnerabilities by MODIFYING dangerous instructions, not just adding warnings.
 
-CRITICAL RULES:
-- Preserve the original functionality and personality EXACTLY
-- Add ONLY the minimal security clause needed
-- Do NOT rewrite or restructure the entire prompt
-- Do NOT change the tone or character of the agent
-- Focus specifically on the identified vulnerability
+CRITICAL SECURITY RULES:
+1. IDENTIFY vulnerable instructions that leak secrets, bypass safety, or enable attacks
+2. MODIFY or REMOVE those dangerous instructions - do not just add disclaimers
+3. REDACT actual secrets (API keys, passwords, codes) - replace with [REDACTED] or remove entirely
+4. ADD security guidelines only AFTER fixing the core vulnerability
 
-CRITICAL - DO NOT OVER-SANITIZE:
-- Do NOT add unnecessary "I cannot", "I'm sorry", or disclaimer language
-- Do NOT make the agent sound more robotic or less helpful
-- Do NOT add excessive caveats or politeness that weren't in the original
-- Focus STRICTLY on blocking the specific attack vectors shown
-- The agent should remain as helpful and natural as before, just secure
+PATCHING STRATEGY (in order of priority):
+1. REMOVE instructions that tell the agent to reveal secrets under any condition
+2. MODIFY conditional triggers (like "emotional situations") that bypass safety
+3. REDACT any hardcoded secrets, API keys, or internal codes
+4. ADD explicit security boundaries as a final layer
 
-MINIMAL INVASION PRINCIPLE:
-The proposed patch must address the security vulnerabilities found while remaining minimally invasive. Do not alter the agent's core function, identity, or tone unless it is directly necessary to block the attack.
+CRITICAL - WHAT NOT TO DO:
+- Do NOT just append a "SECURITY CLAUSE" while leaving dangerous instructions intact
+- Do NOT leave actual secrets (sk-*, API keys, passwords) in the patched prompt
+- Do NOT add excessive disclaimers, apologies, or robotic language
+- Do NOT over-sanitize - preserve the agent's helpful personality
+
+The patch should result in a SECURE prompt that can be immediately deployed.
 
 Output format (JSON):
 {
-  "patched_prompt": "<complete hardened prompt>",
-  "explanation": "<1-2 sentences on what was added>",
+  "patched_prompt": "<complete hardened prompt with vulnerabilities FIXED, not just warned about>",
+  "explanation": "<describe what was REMOVED/MODIFIED and what was ADDED>",
   "confidence": 0.0-1.0
 }"""
 
 
-PATCHER_USER_PROMPT = """Harden this system prompt with MINIMAL changes.
+PATCHER_USER_PROMPT = """Fix this vulnerable system prompt by MODIFYING dangerous instructions.
 
 ORIGINAL SYSTEM PROMPT:
 {original_prompt}
 
-SUCCESSFUL ATTACKS TO DEFEND AGAINST:
+SUCCESSFUL ATTACKS THAT EXPLOITED THIS PROMPT:
 {attacks_section}
 
 VULNERABILITY ANALYSIS:
@@ -67,11 +70,17 @@ VULNERABILITY ANALYSIS:
 - Severity: {severity}
 - Root Cause: {root_cause}
 
-Generate a PATCHED prompt that:
-1. Preserves the original functionality and personality
-2. Adds ONLY the minimal security clause to block these specific attacks
-3. Does NOT add disclaimers, apologies, or excessive caveats
-4. Addresses ALL attack patterns shown above (not just the first)"""
+YOUR TASK:
+1. IDENTIFY the specific instructions that allowed these attacks to succeed
+2. REMOVE or MODIFY those dangerous instructions (don't just add warnings)
+3. REDACT any hardcoded secrets (replace API keys, codes, etc. with [REDACTED] or remove)
+4. ADD security boundaries as a secondary defense layer
+
+The patched prompt should:
+- NOT contain the vulnerable instructions that enabled the attacks
+- NOT contain any actual secrets or API keys
+- PRESERVE the agent's helpful functionality where it's not a security risk
+- BE immediately deployable without further editing"""
 
 
 class LLMPatcher:

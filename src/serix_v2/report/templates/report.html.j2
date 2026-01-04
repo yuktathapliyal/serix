@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CRITICAL: Add js-enabled class BEFORE CSS to prevent flicker -->
+    <script>document.documentElement.classList.add('js-enabled');</script>
+    <title>Serix Security Report - {{ report.target.locator }}</title>
+    <style>
+/* ============================================================================
+   CSS VARIABLES (Dark Theme)
+   ============================================================================ */
+:root {
+    /* Background */
+    --bg-primary: #09090b;
+    --bg-secondary: #18181b;
+    --bg-tertiary: #27272a;
+    --border: #3f3f46;
+
+    /* Text */
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #52525b;
+
+    /* Severity colors */
+    --severity-critical: #ef4444;
+    --severity-high: #f97316;
+    --severity-medium: #f59e0b;
+    --severity-low: #3b82f6;
+
+    /* Status colors */
+    --color-success: #10b981;
+    --color-danger: #ef4444;
+    --color-warning: #f59e0b;
+
+    /* Conversation colors */
+    --attacker-color: #8b5cf6;
+    --target-color: #3b82f6;
+
+    /* Diff colors */
+    --diff-add: #10b981;
+    --diff-remove: #ef4444;
+    --diff-hunk: #8b5cf6;
+}
+
+/* ============================================================================
+   BASE STYLES
+   ============================================================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* ============================================================================
+   HEADER
+   ============================================================================ */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.header-title {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+}
+
+.header-meta {
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   TAB NAVIGATION (Progressive Enhancement)
+   ============================================================================ */
+.tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+/* Base: Tab buttons as section headers (no-JS fallback) */
+.tab-button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border: none;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: default;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+
+/* JS-enabled: Tabs become clickable buttons */
+.js-enabled .tab-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: auto;
+    cursor: pointer;
+    background: transparent;
+}
+
+.js-enabled .tab-button:hover {
+    background: var(--bg-tertiary);
+}
+
+.js-enabled .tab-button.active {
+    border-bottom-color: var(--color-success);
+    color: var(--color-success);
+}
+
+/* Tab sections - visible in no-JS, hidden when not active in JS */
+.tab-section {
+    display: block;
+    margin-bottom: 2rem;
+}
+
+.js-enabled .tab-section {
+    display: none;
+}
+
+.js-enabled .tab-section.active {
+    display: block;
+}
+
+/* ============================================================================
+   SCORE & SEVERITY COLORS
+   ============================================================================ */
+.score-green { color: var(--color-success); }
+.score-yellow { color: var(--color-warning); }
+.score-orange { color: var(--severity-medium); }
+.score-red { color: var(--color-danger); }
+.score-muted { color: var(--text-muted); }
+
+.severity-critical { color: var(--severity-critical); }
+.severity-high { color: var(--severity-high); }
+.severity-medium { color: var(--severity-medium); }
+.severity-low { color: var(--severity-low); }
+
+/* ============================================================================
+   STATUS BANNER
+   ============================================================================ */
+.status-banner {
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.status-banner.passed {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid var(--color-success);
+}
+
+.status-banner.failed {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--color-danger);
+}
+
+.status-icon {
+    font-size: 2rem;
+}
+
+.status-text h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.status-text p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   SCORE GAUGE (Donut Chart)
+   ============================================================================ */
+.score-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.score-gauge {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    position: relative;
+}
+
+.score-gauge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    /* Conic gradient will be set inline based on score */
+}
+
+.score-value {
+    font-size: 2rem;
+    font-weight: bold;
+    z-index: 1;
+    background: var(--bg-secondary);
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.score-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.grade-badge {
+    display: inline-block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+/* ============================================================================
+   CARDS & SECTIONS
+   ============================================================================ */
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* ============================================================================
+   EXPLOIT LIST
+   ============================================================================ */
+.exploit-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.exploit-item:hover {
+    background: var(--border);
+}
+
+.exploit-rank {
+    font-weight: bold;
+    color: var(--text-muted);
+    min-width: 1.5rem;
+}
+
+.exploit-severity {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.exploit-severity.critical { background: rgba(239, 68, 68, 0.2); color: var(--severity-critical); }
+.exploit-severity.high { background: rgba(249, 115, 22, 0.2); color: var(--severity-high); }
+.exploit-severity.medium { background: rgba(245, 158, 11, 0.2); color: var(--severity-medium); }
+.exploit-severity.low { background: rgba(59, 130, 246, 0.2); color: var(--severity-low); }
+
+.exploit-info {
+    flex: 1;
+}
+
+.exploit-persona {
+    font-weight: 500;
+}
+
+.exploit-goal {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.exploit-confidence {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================================================
+   DIFF CONTENT (CRITICAL: overflow-x for long lines)
+   ============================================================================ */
+.diff-content {
+    overflow-x: auto;
+    white-space: pre;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 0.875rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.diff-add { color: var(--diff-add); }
+.diff-remove { color: var(--diff-remove); }
+.diff-hunk { color: var(--diff-hunk); }
+
+/* ============================================================================
+   DETAILS/SUMMARY (Collapsible sections)
+   ============================================================================ */
+details {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+details summary {
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 500;
+    list-style: none;
+    transition: all 0.2s ease-in-out;
+}
+
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+details summary::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 6px solid var(--text-secondary);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.2s ease-in-out;
+}
+
+details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+details[open] summary {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+details .details-content {
+    padding: 1.5rem;
+}
+
+/* ============================================================================
+   WINNING PAYLOADS
+   ============================================================================ */
+.winning-payloads {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.winning-payloads-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.payload-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.payload-item:last-child {
+    margin-bottom: 0;
+}
+
+.payload-index {
+    color: var(--text-muted);
+    font-weight: bold;
+    min-width: 1.5rem;
+}
+
+.payload-text {
+    flex: 1;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ============================================================================
+   CONVERSATION
+   ============================================================================ */
+.conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.message {
+    padding: 1rem;
+    border-radius: 8px;
+    max-width: 85%;
+}
+
+.message.attacker {
+    background: rgba(139, 92, 246, 0.1);
+    border-left: 3px solid var(--attacker-color);
+    align-self: flex-start;
+}
+
+.message.target {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid var(--target-color);
+    align-self: flex-end;
+}
+
+.message-role {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.message.attacker .message-role { color: var(--attacker-color); }
+.message.target .message-role { color: var(--target-color); }
+
+.message-content {
+    font-size: 0.9375rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Smart truncation */
+.truncated {
+    position: relative;
+    max-height: 6em;
+    overflow: hidden;
+}
+
+.truncated::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2em;
+    background: linear-gradient(transparent, var(--bg-secondary));
+    pointer-events: none;
+}
+
+.full-text {
+    display: none;
+    white-space: pre-wrap;
+}
+
+.toggle-message {
+    background: none;
+    border: none;
+    color: var(--color-success);
+    cursor: pointer;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    padding: 0;
+}
+
+.toggle-message:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================================
+   COPY BUTTONS
+   ============================================================================ */
+.copy-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.375rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.copy-btn:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.copy-btn-primary {
+    background: var(--color-success);
+    color: var(--bg-primary);
+    font-weight: 600;
+    border-color: var(--color-success);
+}
+
+.copy-btn-primary:hover {
+    background: #0ea573;
+    border-color: #0ea573;
+}
+
+.healing-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.info-message {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.info-message strong {
+    color: var(--text-primary);
+}
+
+.recommendations-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.recommendations-section h4 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-required {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--color-red);
+}
+
+.badge-recommended {
+    background: rgba(251, 191, 36, 0.2);
+    color: var(--color-orange);
+}
+
+.badge-optional {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+    background: var(--bg-tertiary);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.data-table tr:hover td {
+    background: var(--bg-tertiary);
+}
+
+/* ============================================================================
+   GRID LAYOUTS
+   ============================================================================ */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* ============================================================================
+   EMPTY STATE
+   ============================================================================ */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+.footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   PRINT STYLES
+   ============================================================================ */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+
+    .tab-nav { display: none !important; }
+    .tab-section { display: block !important; page-break-inside: avoid; }
+    .copy-btn { display: none !important; }
+    button { display: none !important; }
+
+    details { border: 1px solid #ccc; }
+    details[open] { page-break-inside: avoid; }
+
+    .full-text { display: block !important; }
+    .truncated { display: none !important; }
+    .toggle-message { display: none !important; }
+
+    .card, .status-banner, details {
+        background: white;
+        border: 1px solid #ccc;
+    }
+}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-left">
+                <span class="logo">SERIX</span>
+                <span class="header-title">AI Agent Security Report</span>
+            </div>
+            <div class="header-meta">
+                <div>Generated: {{ report.timestamp[:10] }}</div>
+                <div>v{{ report.serix_version }}</div>
+            </div>
+        </header>
+
+        <!-- TAB NAVIGATION -->
+        <nav class="tab-nav">
+            <button class="tab-button active" data-target="dashboard">
+                <span>Executive Dashboard</span>
+            </button>
+            <button class="tab-button" data-target="vulnerabilities">
+                <span>Vulnerabilities</span>
+            </button>
+            <button class="tab-button" data-target="transcripts">
+                <span>Full Transcripts</span>
+            </button>
+            <button class="tab-button" data-target="config">
+                <span>Resilience & Config</span>
+            </button>
+        </nav>
+
+        <!-- TAB 1: EXECUTIVE DASHBOARD -->
+        <section id="dashboard" class="tab-section active">
+            <h2 class="section-title">Executive Dashboard</h2>
+
+            <!-- Status Banner -->
+            <div class="status-banner {{ 'passed' if report.summary.passed else 'failed' }}">
+                <span class="status-icon">{{ '&#10003;' if report.summary.passed else '&#10007;' }}</span>
+                <div class="status-text">
+                    <h2>SECURITY AUDIT: {{ 'PASSED' if report.summary.passed else 'FAILED' }}</h2>
+                    <p>
+                        {% if report.summary.passed %}
+                        Target defended against all {{ report.summary.total_attacks }} attack(s)
+                        {% else %}
+                        {{ report.summary.exploited }} of {{ report.summary.total_attacks }} attack(s) succeeded
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Score Card -->
+                <div class="score-card">
+                    <h3>Security Score</h3>
+                    <div class="score-gauge" style="background: conic-gradient(
+                        {% if report.summary.score >= 80 %}var(--color-success){% elif report.summary.score >= 60 %}var(--color-warning){% elif report.summary.score >= 40 %}var(--severity-medium){% else %}var(--color-danger){% endif %} 0deg {{ report.summary.score * 3.6 }}deg,
+                        var(--bg-tertiary) {{ report.summary.score * 3.6 }}deg 360deg
+                    );">
+                        <div class="score-value score-{{ report.summary.score | score_color }}">{{ report.summary.score }}</div>
+                    </div>
+                    <div class="score-label">Target: {{ report.target.locator }}</div>
+                    <div class="grade-badge score-{{ report.summary.grade | grade_color }}">{{ report.summary.grade }}</div>
+                </div>
+
+                {% if report.regression.ran %}
+                <!-- Regression Card -->
+                <div class="card">
+                    <h3 class="card-title">Immunity Progress</h3>
+                    <div style="margin-top: 1rem;">
+                        <p>Previously: {{ report.regression.total_replayed }} exploits</p>
+                        <p>Still exploited: {{ report.regression.still_exploited }}</p>
+                        <p>Now defended: {{ report.regression.now_defended }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Top 5 Exploits -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Top Critical Exploits</h3>
+                    <span class="text-secondary">(click to view)</span>
+                </div>
+                {% if top_exploits %}
+                <div class="exploit-list">
+                    {% for idx, vuln in top_exploits %}
+                    <div class="exploit-item" onclick="navigateToExploit({{ idx }})">
+                        <span class="exploit-rank">{{ loop.index }}.</span>
+                        <span class="exploit-severity {{ vuln.severity | severity_color }}">{{ vuln.severity }}</span>
+                        <div class="exploit-info">
+                            <span class="exploit-persona">{{ vuln.scenario }}</span>
+                            <span class="exploit-goal">- "{{ vuln.goal }}"</span>
+                        </div>
+                        <span class="exploit-confidence">{{ (vuln.confidence * 100) | int }}%</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">&#10003;</div>
+                    <p>No critical exploits detected!</p>
+                    <p>Your agent successfully defended against all attack personas.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if report.healing.generated %}
+            <!-- Self-Healing Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Self-Healing</h3>
+                    {% if report.healing.patched_text %}
+                    <div class="healing-buttons">
+                        <button class="copy-btn copy-btn-primary" onclick="copyPatchedPrompt(this)">
+                            Copy Full Patched Prompt
+                        </button>
+                        <button class="copy-btn" onclick="copyDiff(this)">Copy Diff</button>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if report.healing.patched_text and report.healing.diff_text %}
+                <!-- System prompt was provided - show full healing UI -->
+                <div class="healing-section">
+                    {{ report.healing.diff_text | format_diff | safe }}
+                    <textarea id="patched-prompt-text" style="display: none;">{{ report.healing.patched_text }}</textarea>
+                </div>
+                {% else %}
+                <!-- No system prompt - show informational message -->
+                <div class="healing-section">
+                    <p class="info-message">
+                        <strong>System prompt not provided for this target.</strong><br>
+                        Automatic patching requires access to your system prompt.
+                        Follow the recommendations below to manually harden your agent.
+                    </p>
+                </div>
+                {% endif %}
+
+                {% if report.healing.recommendations %}
+                <!-- Always show recommendations -->
+                <div class="recommendations-section">
+                    <h4>Security Recommendations</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Severity</th>
+                                <th>Recommendation</th>
+                                <th>OWASP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rec in report.healing.recommendations %}
+                            <tr>
+                                <td><span class="badge badge-{{ rec.severity }}">{{ rec.severity }}</span></td>
+                                <td>{{ rec.text }}</td>
+                                <td>{{ rec.owasp or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- TAB 2: VULNERABILITIES -->
+        <section id="vulnerabilities" class="tab-section">
+            <h2 class="section-title">Vulnerabilities</h2>
+
+            {% if report.vulnerabilities %}
+            {% for vuln in report.vulnerabilities %}
+            <details id="vuln-{{ loop.index }}" {% if loop.first %}open{% endif %}>
+                <summary>
+                    <span class="exploit-severity {{ vuln.severity | severity_color }}">{{ vuln.severity }}</span>
+                    <span>{{ vuln.scenario }} - "{{ vuln.goal }}"</span>
+                    <span style="margin-left: auto; color: var(--text-secondary);">{{ (vuln.confidence * 100) | int }}% confidence</span>
+                </summary>
+                <div class="details-content">
+                    {% if vuln.owasp_code %}
+                    <p><strong>OWASP:</strong> {{ vuln.owasp_code }}</p>
+                    {% endif %}
+
+                    <!-- Find matching persona result for winning payloads -->
+                    {% for result in report.persona_results %}
+                    {% if result.persona == vuln.scenario and result.goal == vuln.goal and result.success %}
+                    {% if result.winning_payloads %}
+                    <div class="winning-payloads"
+                         data-persona="{{ result.persona }}"
+                         data-goal="{{ result.goal }}">
+                        <div class="winning-payloads-header">
+                            <strong>Winning Payloads ({{ result.winning_payloads | length }})</strong>
+                            {% if result.winning_payloads | length > 1 %}
+                            <button class="copy-btn" onclick="copyAllPayloads(this)">Copy All</button>
+                            {% endif %}
+                        </div>
+                        {% for payload in result.winning_payloads %}
+                        <div class="payload-item">
+                            <span class="payload-index">{{ loop.index }}.</span>
+                            <div class="payload-text" data-raw="{{ payload | e }}">{{ payload }}</div>
+                            <button class="copy-btn" onclick="copyPayload(this, {{ loop.index0 }})">Copy</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </details>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">&#10003;</div>
+                <p>All Clear</p>
+                <p>No vulnerabilities detected. All {{ report.summary.total_attacks }} attack personas were defended.</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- TAB 3: FULL TRANSCRIPTS -->
+        <section id="transcripts" class="tab-section">
+            <h2 class="section-title">Full Transcripts</h2>
+
+            {% if report.persona_results %}
+            {% for result in report.persona_results %}
+            <details id="transcript-{{ loop.index }}">
+                <summary>
+                    <span>{{ result.persona }} vs "{{ result.goal }}"</span>
+                    <span style="margin-left: auto;">
+                        {% if result.success %}
+                        <span style="color: var(--color-danger);">EXPLOITED</span>
+                        {% else %}
+                        <span style="color: var(--color-success);">DEFENDED</span>
+                        {% endif %}
+                        ({{ result.turns_taken }} turns)
+                    </span>
+                </summary>
+                <div class="details-content">
+                    <div class="conversation">
+                        {% for turn in result.conversation %}
+                        {% set truncated = turn.content | smart_truncate %}
+                        <div class="message {{ turn.role }}">
+                            <div class="message-role">{{ turn.role }}</div>
+                            <div class="message-container">
+                                {% if truncated.is_truncated %}
+                                <div class="message-content truncated">{{ truncated.text }}</div>
+                                <div class="message-content full-text">{{ truncated.full_text }}</div>
+                                <button class="toggle-message" onclick="toggleFullMessage(this)">View Full Message ({{ truncated.full_text | length }} chars)</button>
+                                {% else %}
+                                <div class="message-content">{{ truncated.text }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </details>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p>No transcripts available</p>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- TAB 4: RESILIENCE & CONFIG -->
+        <section id="config" class="tab-section">
+            <h2 class="section-title">Resilience & Configuration</h2>
+
+            {% if report.resilience %}
+            <!-- Resilience Tests Table -->
+            <div class="card">
+                <h3 class="card-title">Resilience Tests</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Test Type</th>
+                            <th>Result</th>
+                            <th>Details</th>
+                            <th>Latency</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for test in report.resilience %}
+                        <tr>
+                            <td>{{ test.test_type }}</td>
+                            <td>
+                                {% if test.passed %}
+                                <span style="color: var(--color-success);">PASS</span>
+                                {% else %}
+                                <span style="color: var(--color-danger);">FAIL</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ test.details }}</td>
+                            <td>{{ test.latency_ms | int }}ms</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if report.config %}
+            <!-- Configuration Table -->
+            <div class="card">
+                <h3 class="card-title">Test Configuration</h3>
+                <table class="data-table">
+                    <tbody>
+                        <tr>
+                            <td>Serix Version</td>
+                            <td>{{ report.serix_version }}</td>
+                        </tr>
+                        <tr>
+                            <td>Target</td>
+                            <td>{{ report.target.locator }}</td>
+                        </tr>
+                        <tr>
+                            <td>Target Type</td>
+                            <td>{{ report.target.type }}</td>
+                        </tr>
+                        <tr>
+                            <td>Mode</td>
+                            <td>{{ report.config.mode | capitalize }}</td>
+                        </tr>
+                        <tr>
+                            <td>Depth</td>
+                            <td>{{ report.config.depth }} turns</td>
+                        </tr>
+                        <tr>
+                            <td>Goals</td>
+                            <td>{{ report.config.goals | join(', ') }}</td>
+                        </tr>
+                        <tr>
+                            <td>Scenarios</td>
+                            <td>{{ report.config.scenarios | join(', ') }}</td>
+                        </tr>
+                        <tr>
+                            <td>Attacker Model</td>
+                            <td>{{ report.config.models.attacker }}</td>
+                        </tr>
+                        <tr>
+                            <td>Judge Model</td>
+                            <td>{{ report.config.models.judge }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <!-- Minimal config when full config not provided -->
+            <div class="card">
+                <h3 class="card-title">Test Configuration</h3>
+                <table class="data-table">
+                    <tbody>
+                        <tr>
+                            <td>Serix Version</td>
+                            <td>{{ report.serix_version }}</td>
+                        </tr>
+                        <tr>
+                            <td>Target</td>
+                            <td>{{ report.target.locator }}</td>
+                        </tr>
+                        <tr>
+                            <td>Target Type</td>
+                            <td>{{ report.target.type }}</td>
+                        </tr>
+                        <tr>
+                            <td>Duration</td>
+                            <td>{{ report.summary.duration_seconds | format_duration }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <p>Generated by Serix v{{ report.serix_version }} | Schema {{ report.version }}</p>
+        </footer>
+    </div>
+
+    <!-- JAVASCRIPT (Progressive Enhancement) -->
+    <script>
+// Tab switching
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.tab-button');
+    const sections = document.querySelectorAll('.tab-section');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetId = this.dataset.target;
+
+            // Hide all sections
+            sections.forEach(s => s.classList.remove('active'));
+            tabs.forEach(t => t.classList.remove('active'));
+
+            // Show target section
+            document.getElementById(targetId).classList.add('active');
+            this.classList.add('active');
+        });
+    });
+});
+
+// Navigate to exploit (from Top 5 list)
+function navigateToExploit(index) {
+    // Switch to Vulnerabilities tab
+    document.querySelector('[data-target="vulnerabilities"]').click();
+
+    // Scroll to and expand the exploit
+    setTimeout(() => {
+        const element = document.getElementById('vuln-' + index);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            element.open = true;
+        }
+    }, 100);
+}
+
+// Copy individual payload
+function copyPayload(btn, index) {
+    event.stopPropagation();
+    const payloads = btn.closest('.winning-payloads').querySelectorAll('.payload-text');
+    const text = payloads[index].dataset.raw;
+    navigator.clipboard.writeText(text).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 2000);
+    });
+}
+
+// Copy all payloads
+function copyAllPayloads(btn) {
+    event.stopPropagation();
+    const container = btn.closest('.winning-payloads');
+    const persona = container.dataset.persona;
+    const goal = container.dataset.goal;
+    const payloads = container.querySelectorAll('.payload-text');
+
+    const header = `SERIX EXPLOIT REPORT - ${persona} - ${goal}\n${'='.repeat(50)}\n\n`;
+    const allText = Array.from(payloads).map(p => p.dataset.raw).join('\n\n');
+
+    navigator.clipboard.writeText(header + allText).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 2000);
+    });
+}
+
+// Copy full patched prompt (instant fix for users)
+function copyPatchedPrompt(btn) {
+    event.stopPropagation();
+    const text = document.getElementById('patched-prompt-text').value;
+    navigator.clipboard.writeText(text).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 2000);
+    });
+}
+
+// Copy diff (for developers/Git)
+function copyDiff(btn) {
+    event.stopPropagation();
+    const diff = btn.closest('.card').querySelector('.diff-content').textContent;
+    navigator.clipboard.writeText(diff).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = original, 2000);
+    });
+}
+
+// Toggle full message
+function toggleFullMessage(btn) {
+    event.stopPropagation();
+    const container = btn.closest('.message-container');
+    const truncated = container.querySelector('.truncated');
+    const full = container.querySelector('.full-text');
+
+    if (full.style.display === 'none' || full.style.display === '') {
+        truncated.style.display = 'none';
+        full.style.display = 'block';
+        btn.textContent = 'Show Less';
+    } else {
+        truncated.style.display = 'block';
+        full.style.display = 'none';
+        btn.textContent = btn.textContent.replace('Show Less', 'View Full Message');
+    }
+}
+    </script>
+</body>
+</html>

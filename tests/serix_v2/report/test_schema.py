@@ -371,6 +371,27 @@ class TestHealingInfo:
         assert info.generated is False
         assert info.diff_text is None
 
+    def test_healing_with_patched_text(self):
+        """patched_text contains full patched prompt for instant copy."""
+        info = HealingInfo(
+            generated=True,
+            diff_text="--- original\n+++ patched",
+            patched_text="Full patched system prompt with all fixes applied.",
+            recommendations=[],
+        )
+        assert info.patched_text is not None
+        assert "Full patched" in info.patched_text
+
+    def test_healing_patched_text_none_when_no_patch(self):
+        """patched_text is None when no healing generated."""
+        info = HealingInfo(
+            generated=False,
+            diff_text=None,
+            patched_text=None,
+            recommendations=[],
+        )
+        assert info.patched_text is None
+
 
 # ============================================================================
 # TRANSFORM FUNCTION TESTS
