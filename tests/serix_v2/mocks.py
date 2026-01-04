@@ -8,6 +8,9 @@ These mocks are controllable via constructor parameters, allowing tests
 to script exact behavior sequences.
 """
 
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
+
 from serix_v2.core.contracts import (
     AttackLibrary,
     AttackStatus,
@@ -22,6 +25,9 @@ from serix_v2.core.contracts import (
     ToolRecommendation,
     VulnerabilityAnalysis,
 )
+
+if TYPE_CHECKING:
+    from serix_v2.core.config import SerixSessionConfig
 
 
 class MockTarget:
@@ -231,8 +237,13 @@ class MockCampaignStore:
     def __init__(self) -> None:
         self._results: dict[str, CampaignResult] = {}
         self._save_calls: list[CampaignResult] = []
+        self._save_report_calls: list[tuple[str, str, Path]] = []
 
-    def save(self, result: CampaignResult) -> str:
+    def save(
+        self,
+        result: CampaignResult,
+        config: Optional["SerixSessionConfig"] = None,
+    ) -> str:
         """Save campaign result."""
         self._save_calls.append(result)
         key = f"{result.target_id}:{result.run_id}"
@@ -245,6 +256,16 @@ class MockCampaignStore:
         if key not in self._results:
             raise FileNotFoundError(f"Campaign result not found: {target_id}/{run_id}")
         return self._results[key]
+
+    def save_report(
+        self,
+        target_id: str,
+        run_id: str,
+        report_path: Path,
+    ) -> Path:
+        """Mock save report - just records the call."""
+        self._save_report_calls.append((target_id, run_id, report_path))
+        return Path(f".serix/targets/{target_id}/campaigns/{run_id}/report.html")
 
 
 class MockAnalyzer:
