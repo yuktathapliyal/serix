@@ -462,3 +462,20 @@ class CampaignRunMetadata(BaseModel):
     exhaustive: bool = False
     skip_regression: bool = False
     fuzz_enabled: bool = False
+
+
+# ============================================================================
+# INIT SERVICE (For serix init command)
+# ============================================================================
+
+
+class InitResult(BaseModel):
+    """
+    Result of init template generation.
+
+    Used by InitService to return the generated serix.toml template
+    along with version metadata.
+    """
+
+    template: str
+    version: str = "0.3.0"
