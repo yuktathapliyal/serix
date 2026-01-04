@@ -284,7 +284,10 @@ class TestWorkflow:
 
         # Step 10: Save results (if not dry_run)
         if self._config.should_write_to_disk():
-            self._attack_store.save(library)
+            # Note: add_attack() already saves attacks incrementally, so we reload
+            # the current library state before saving to avoid overwriting
+            current_library = self._attack_store.load(target_id)
+            self._attack_store.save(current_library)
             self._campaign_store.save(campaign_result)
 
             # Update alias index if target_name provided
