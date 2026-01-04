@@ -68,3 +68,4 @@ results.json
 serix-results.json
 test-results.json
 .serix/
+.claude/settings.local.json
