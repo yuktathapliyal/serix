@@ -12,7 +12,7 @@ Law Compliance:
 Reference: Phase 11B, Spec 2.4
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -93,7 +93,9 @@ class StatusService:
                 targets.append(status)
 
         # Sort by last_tested (most recent first)
-        targets.sort(key=lambda t: t.last_tested or datetime.min, reverse=True)
+        # Use timezone-aware min datetime to handle both aware and naive datetimes
+        min_dt = datetime.min.replace(tzinfo=timezone.utc)
+        targets.sort(key=lambda t: t.last_tested or min_dt, reverse=True)
 
         return StatusSummary(
             total_targets=len(targets),
