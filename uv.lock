@@ -897,6 +897,19 @@ wheels = [
 ]
 
 [[package]]
+name = "loguru"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "win32-setctime", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595, upload-time = "2024-12-06T11:20:54.538Z" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1683,6 +1696,50 @@ wheels = [
 ]
 
 [[package]]
+name = "rich-click"
+version = "1.9.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/d1/b60ca6a8745e76800b50c7ee246fd73f08a3be5d8e0b551fc93c19fa1203/rich_click-1.9.5.tar.gz", hash = "sha256:48120531493f1533828da80e13e839d471979ec8d7d0ca7b35f86a1379cc74b6", size = 73927, upload-time = "2025-12-21T14:49:44.167Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/0a/d865895e1e5d88a60baee0fc3703eb111c502ee10c8c107516bc7623abf8/rich_click-1.9.5-py3-none-any.whl", hash = "sha256:9b195721a773b1acf0e16ff9ec68cef1e7d237e53471e6e3f7ade462f86c403a", size = 70580, upload-time = "2025-12-21T14:49:42.905Z" },
+]
+
+[[package]]
+name = "rich-color-ext"
+version = "0.1.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "loguru" },
+    { name = "pytest" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/a2/ba3dfff54c51ccce1304cd3315a1861c67e2142db2e9a778ef0bb11ab4b1/rich_color_ext-0.1.9.tar.gz", hash = "sha256:d32393b8e29bfc2add3eb89ffae26fe683f388325ea51461c1889a53e7f6d371", size = 2749855, upload-time = "2025-11-19T09:36:07.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/9c/bbc2f72e407d9457f4b9ae2165c05c4474dd5570dd4043603656269a6fad/rich_color_ext-0.1.9-py3-none-any.whl", hash = "sha256:7005f871792f68cc188751d68bfc1e401456c46336103760a5eedba27048bc82", size = 16014, upload-time = "2025-11-19T09:36:05.858Z" },
+]
+
+[[package]]
+name = "rich-gradient"
+version = "0.3.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "loguru" },
+    { name = "rich" },
+    { name = "rich-click" },
+    { name = "rich-color-ext" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/de/3c91a072ed77870117674ec2fa7dd127422362cb1e059b96cf4cac19bf77/rich_gradient-0.3.9.tar.gz", hash = "sha256:2e0cd23021166d9eb299a397b254b34fe45ef8c367fc90291408c9b0f69acd39", size = 16958274, upload-time = "2025-11-29T07:12:07.145Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/31/e5fd8c5fd81483451f01b107747fd7150e4ffd60191d4d7bece44c854c27/rich_gradient-0.3.9-py3-none-any.whl", hash = "sha256:3f135e74d6787d326cbcd425ce7f38c7f8bc57739c58a1f641393e17c115d4f6", size = 64944, upload-time = "2025-11-29T07:12:04.883Z" },
+]
+
+[[package]]
 name = "rpds-py"
 version = "0.30.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1828,6 +1885,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "rich" },
+    { name = "rich-gradient" },
     { name = "typer" },
 ]
 
@@ -1849,6 +1907,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
+    { name = "rich-gradient", specifier = ">=0.3.9" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
@@ -2041,6 +2100,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/20/28/e6f1a6f655d620846bd9df527390ecc26b3805a0c5989048c210e22c5ca9/virtualenv-20.35.4.tar.gz", hash = "sha256:643d3914d73d3eeb0c552cbb12d7e82adf0e504dbf86a3182f8771a153a1971c", size = 6028799, upload-time = "2025-10-29T06:57:40.511Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/79/0c/c05523fa3181fdf0c9c52a6ba91a23fbf3246cc095f26f6516f9c60e6771/virtualenv-20.35.4-py3-none-any.whl", hash = "sha256:c21c9cede36c9753eeade68ba7d523529f228a403463376cf821eaae2b650f1b", size = 6005095, upload-time = "2025-10-29T06:57:37.598Z" },
+]
+
+[[package]]
+name = "win32-setctime"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
 ]
 
 [[package]]

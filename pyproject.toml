@@ -39,6 +39,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "tomli>=2.0.0;python_version<'3.11'",
     "litellm>=1.0.0",
+    "rich-gradient>=0.3.9",
 ]
 
 [project.urls]
@@ -47,7 +48,7 @@ Repository = "https://github.com/yuktathapliyal/serix"
 Documentation = "https://github.com/yuktathapliyal/serix#readme"
 
 [project.scripts]
-serix = "serix.cli:app"
+serix = "serix_v2.cli.app:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -64,7 +65,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/serix"]
+packages = ["src/serix", "src/serix_v2"]
 
 [tool.pytest.ini_options]
 markers = [
