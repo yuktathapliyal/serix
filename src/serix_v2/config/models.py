@@ -41,6 +41,7 @@ class TomlRegressionConfig(BaseModel):
     """[regression] section of serix.toml."""
 
     enabled: bool | None = None  # INVERTED to skip_regression in SerixSessionConfig
+    skip_regression: bool | None = None  # Direct field (takes precedence over enabled)
     skip_mitigated: bool | None = None
 
 

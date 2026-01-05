@@ -241,14 +241,16 @@ def resolve_fuzz_latency(
 
 def resolve_skip_regression(
     cli_skip_regression: bool | None,
+    toml_skip_regression: bool | None,
     toml_enabled: bool | None,
 ) -> bool:
     """
-    Resolve skip_regression with inversion from [regression].enabled.
+    Resolve skip_regression with support for both direct and inverted fields.
 
     Args:
         cli_skip_regression: From CLI --skip-regression.
-        toml_enabled: From config [regression].enabled.
+        toml_skip_regression: From config [regression].skip_regression (direct).
+        toml_enabled: From config [regression].enabled (inverted).
 
     Returns:
         True if regression should be skipped.
@@ -256,6 +258,10 @@ def resolve_skip_regression(
     # CLI wins
     if cli_skip_regression is not None:
         return cli_skip_regression
+
+    # Direct skip_regression field takes precedence over enabled
+    if toml_skip_regression is not None:
+        return toml_skip_regression
 
     # Invert: enabled=true → skip=False, enabled=false → skip=True
     if toml_enabled is not None:
@@ -493,7 +499,9 @@ def resolve_config(
     # REGRESSION
     # ========================================================================
     skip_regression = resolve_skip_regression(
-        cli.skip_regression, toml.regression.enabled
+        cli.skip_regression,
+        toml.regression.skip_regression,
+        toml.regression.enabled,
     )
     skip_mitigated = _first_non_none(
         cli.skip_mitigated, toml.regression.skip_mitigated, False
