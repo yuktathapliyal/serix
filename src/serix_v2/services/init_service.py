@@ -36,6 +36,7 @@ path = "agent.py:my_agent"            # Python: "path/to/file.py:function_name"
 # input_field = "message"             # JSON key for user input
 # output_field = "response"           # JSON key for agent response
 # headers = {}                        # HTTP headers as JSON object
+# headers_file = ""                   # Load headers from JSON file (for secrets)
 
 # ----------------------------------------------------------------------------
 # ATTACK — How to test
@@ -55,7 +56,7 @@ scenarios = "all"                     # "all" | "jailbreak" | "extraction" |
 # REGRESSION — Immune Check behavior
 # ----------------------------------------------------------------------------
 # [regression]
-# enabled = true                      # Run Immune Check before new attacks (--skip-regression inverts)
+# skip_regression = false             # Skip Immune Check entirely (--skip-regression)
 # skip_mitigated = false              # Skip attacks with status 'defended'
 
 # ----------------------------------------------------------------------------
