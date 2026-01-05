@@ -19,7 +19,7 @@ BRAND_GRADIENT_COLORS = ["#ff375f", "#bf5af2"]  # Pink → Purple
 
 # Semantic colors
 COLOR_COMMAND = "#f8f4ff bold"  # Magnolia + bold - actionable items users type
-COLOR_GOAL = "#e0c8a0"  # Soft Amber - gold undertone, premium warmth
+COLOR_GOAL = "#6AB8D8"  # Muted Apple Cyan - desaturated cyan for user input/goals
 COLOR_DIM = "#a8a0b0"  # Silver Purple - warm gray with purple undertone
 COLOR_SUBTITLE = "#b8b0c0"  # Lifted Silver - header-level muted, above body text
 COLOR_URL = (
