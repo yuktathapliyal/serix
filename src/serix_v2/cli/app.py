@@ -23,6 +23,7 @@ from rich.text import Text
 from typer.core import TyperGroup
 
 from serix_v2.cli.commands import demo, init, run, status, test
+from serix_v2.cli.subcommand_help import InitHelpCommand
 from serix_v2.cli.theme import (
     COLOR_COMMAND,
     COLOR_DIM,
@@ -253,7 +254,7 @@ def version_callback(value: bool) -> None:
 
 # Register commands with descriptions matching COMMAND_HELP
 app.command("demo", help=COMMAND_HELP["demo"])(demo)
-app.command("init", help=COMMAND_HELP["init"])(init)
+app.command("init", help=COMMAND_HELP["init"], cls=InitHelpCommand)(init)
 app.command("run", hidden=True)(run)  # Hidden - v0.2 backward compat only
 app.command("status", help=COMMAND_HELP["status"])(status)
 app.command("test", help=COMMAND_HELP["test"])(test)
