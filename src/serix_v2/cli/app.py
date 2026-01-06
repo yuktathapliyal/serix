@@ -23,7 +23,7 @@ from rich.text import Text
 from typer.core import TyperGroup
 
 from serix_v2.cli.commands import demo, init, run, status, test
-from serix_v2.cli.subcommand_help import InitHelpCommand
+from serix_v2.cli.subcommand_help import InitHelpCommand, TestHelpCommand
 from serix_v2.cli.theme import (
     COLOR_COMMAND,
     COLOR_DIM,
@@ -35,7 +35,6 @@ from serix_v2.cli.theme import (
     FIRST_COL_WIDTH,
     GLOBAL_MARGIN,
     ITEM_INDENT,
-    OVERFLOW_THRESHOLD,
     SUBTITLE_TEXT,
     TAGLINE_LINES,
     create_gradient_brand,
@@ -159,42 +158,27 @@ def _render_options_section() -> None:
 
 
 def _render_get_started_section() -> None:
-    """Render the Get started section with overflow rule for long commands."""
+    """Render the Get started section with comment-style descriptions."""
     indent = " " * GLOBAL_MARGIN
     item_indent = " " * ITEM_INDENT
-    # Overflow descriptions: visually balanced indent
-    desc_indent = " " * 32
 
     _help_console.print(f"{indent}[{COLOR_DIM}]Get started:[/{COLOR_DIM}]")
 
-    for i, (command, description, has_goal) in enumerate(GET_STARTED_EXAMPLES):
+    for command, description, has_goal in GET_STARTED_EXAMPLES:
         # Build command with optional goal highlight
         if has_goal:
-            command_styled = f"{item_indent}[{COLOR_COMMAND}]{command}[/{COLOR_COMMAND}] [{COLOR_GOAL}]{GOAL_EXAMPLE_TEXT}[/{COLOR_GOAL}]"
-            effective_len = len(item_indent) + len(command) + 1 + len(GOAL_EXAMPLE_TEXT)
+            command_styled = (
+                f"{item_indent}[{COLOR_COMMAND}]{command}[/{COLOR_COMMAND}] "
+                f"[{COLOR_GOAL}]{GOAL_EXAMPLE_TEXT}[/{COLOR_GOAL}]"
+            )
         else:
             command_styled = (
                 f"{item_indent}[{COLOR_COMMAND}]{command}[/{COLOR_COMMAND}]"
             )
-            effective_len = len(item_indent) + len(command.replace("\\[", "["))
 
-        desc_styled = f"[{COLOR_DIM}]{description}[/{COLOR_DIM}]"
-
-        if effective_len >= OVERFLOW_THRESHOLD + ITEM_INDENT:
-            # Long command: command on its own line, description on next line at col 30
-            _help_console.print(command_styled)
-            _help_console.print(f"{desc_indent}{desc_styled}")
-        else:
-            # Short command: use table for proper alignment
-            table = Table.grid(padding=(0, 2))
-            table.add_column(width=FIRST_COL_WIDTH)
-            table.add_column()
-            table.add_row(command_styled, desc_styled)
-            _help_console.print(table)
-
-        # Add blank line between examples (but not after the last one)
-        if i < len(GET_STARTED_EXAMPLES) - 1:
-            _help_console.print()
+        # Format: command  # description (comment-style)
+        line = f"{command_styled}  [{COLOR_DIM}]# {description}[/{COLOR_DIM}]"
+        _help_console.print(line)
 
     _help_console.print()
 
@@ -257,7 +241,7 @@ app.command("demo", help=COMMAND_HELP["demo"])(demo)
 app.command("init", help=COMMAND_HELP["init"], cls=InitHelpCommand)(init)
 app.command("run", hidden=True)(run)  # Hidden - v0.2 backward compat only
 app.command("status", help=COMMAND_HELP["status"])(status)
-app.command("test", help=COMMAND_HELP["test"])(test)
+app.command("test", help=COMMAND_HELP["test"], cls=TestHelpCommand)(test)
 
 
 @app.callback()
