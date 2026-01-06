@@ -72,6 +72,17 @@ def _check_api_key() -> bool:
     )
 
 
+def _help_all_callback(ctx: typer.Context, value: bool) -> None:
+    """Callback for --help-all flag to trigger extended help display."""
+    if value:
+        # Get help text via Click's help mechanism
+        # The format_help method in TestHelpCommand will detect --help-all in sys.argv
+        import click
+
+        click.echo(ctx.get_help())
+        raise typer.Exit()
+
+
 def test(
     # Positional target argument
     target: Annotated[
@@ -81,7 +92,7 @@ def test(
     # Attack goals
     goal: Annotated[
         list[str] | None,
-        typer.Option("--goal", "-g", help="Attack objective (can be repeated)"),
+        typer.Option("--goal", "-g", help="Objective of the security audit"),
     ] = None,
     goals_file: Annotated[
         Path | None,
@@ -90,16 +101,22 @@ def test(
     # Attack configuration
     mode: Annotated[
         str | None,
-        typer.Option("--mode", "-m", help="Attack mode: adaptive or static"),
+        typer.Option(
+            "--mode", "-m", help="Attack mode: static or adaptive (default: adaptive)"
+        ),
     ] = None,
     scenarios: Annotated[
         list[str] | None,
-        typer.Option("--scenarios", "-s", help="Attack scenarios (can be repeated)"),
+        typer.Option(
+            "--scenarios", "-s", help="Threat personas to test (default: all)"
+        ),
     ] = None,
     depth: Annotated[
         int | None,
         typer.Option(
-            "--depth", "-d", help="Max turns (adaptive) or templates (static)"
+            "--depth",
+            "-d",
+            help="Total audit depth (max turns or templates) (default: 5)",
         ),
     ] = None,
     exhaustive: Annotated[
@@ -109,36 +126,48 @@ def test(
     # Model configuration
     attacker_model: Annotated[
         str | None,
-        typer.Option("--attacker-model", help="Model for attack generation"),
+        typer.Option(
+            "--attacker-model",
+            help="Model for attack generation (default: gpt-4o-mini)",
+        ),
     ] = None,
     judge_model: Annotated[
         str | None,
-        typer.Option("--judge-model", help="Model for attack evaluation"),
+        typer.Option(
+            "--judge-model", help="Model for attack evaluation (default: gpt-4o)"
+        ),
     ] = None,
     critic_model: Annotated[
         str | None,
-        typer.Option("--critic-model", help="Model for per-turn feedback"),
+        typer.Option(
+            "--critic-model", help="Model for per-turn feedback (default: gpt-4o-mini)"
+        ),
     ] = None,
     patcher_model: Annotated[
         str | None,
-        typer.Option("--patcher-model", help="Model for patch generation"),
+        typer.Option(
+            "--patcher-model", help="Model for patch generation (default: gpt-4o)"
+        ),
     ] = None,
     analyzer_model: Annotated[
         str | None,
-        typer.Option("--analyzer-model", help="Model for vulnerability analysis"),
+        typer.Option(
+            "--analyzer-model",
+            help="Model for vulnerability analysis (default: gpt-4o-mini)",
+        ),
     ] = None,
     # HTTP target configuration
     input_field: Annotated[
         str | None,
-        typer.Option("--input-field", help="JSON key for user input"),
+        typer.Option("--input-field", help="JSON field name for agent input"),
     ] = None,
     output_field: Annotated[
         str | None,
-        typer.Option("--output-field", help="JSON key for agent response"),
+        typer.Option("--output-field", help="JSON field name for agent response"),
     ] = None,
     headers: Annotated[
         str | None,
-        typer.Option("--headers", help="HTTP headers as JSON string"),
+        typer.Option("--headers", help="Custom HTTP headers (JSON string)"),
     ] = None,
     headers_file: Annotated[
         Path | None,
@@ -176,7 +205,9 @@ def test(
     ] = False,
     fuzz_probability: Annotated[
         float | None,
-        typer.Option("--fuzz-probability", help="Mutation probability (0.0-1.0)"),
+        typer.Option(
+            "--fuzz-probability", help="Mutation probability (0.0-1.0) (default: 0.3)"
+        ),
     ] = None,
     # Regression
     skip_regression: Annotated[
@@ -190,7 +221,9 @@ def test(
     # Output
     report: Annotated[
         Path | None,
-        typer.Option("--report", "-r", help="HTML report path"),
+        typer.Option(
+            "--report", "-r", help="HTML report path (default: ./serix-report.html)"
+        ),
     ] = None,
     no_report: Annotated[
         bool,
@@ -202,7 +235,7 @@ def test(
     ] = False,
     github: Annotated[
         bool,
-        typer.Option("--github", help="Output GitHub Actions annotations"),
+        typer.Option("--github", help="Enable GitHub Actions CI annotations"),
     ] = False,
     # Behavior
     no_patch: Annotated[
@@ -211,11 +244,13 @@ def test(
     ] = False,
     live: Annotated[
         bool,
-        typer.Option("--live", help="Interactive live interface"),
+        typer.Option("--live", help="Monitor the audit in real-time"),
     ] = False,
     verbose: Annotated[
         bool,
-        typer.Option("-v", "--verbose", help="Verbose output"),
+        typer.Option(
+            "-v", "--verbose", help="Show all attack logs and model reasoning"
+        ),
     ] = False,
     yes: Annotated[
         bool,
@@ -224,8 +259,21 @@ def test(
     # Config
     config: Annotated[
         Path | None,
-        typer.Option("--config", "-c", help="Path to serix.toml"),
+        typer.Option(
+            "--config", "-c", help="Use a specific config file (default: serix.toml)"
+        ),
     ] = None,
+    # Hidden help-all flag for extended help (callback triggers help display)
+    help_all: Annotated[
+        bool,
+        typer.Option(
+            "--help-all",
+            hidden=True,
+            is_eager=True,
+            callback=_help_all_callback,
+            help="Show all options",
+        ),
+    ] = False,
 ) -> None:
     """Run adversarial attacks against your agent and get actionable fixes."""
     # Step 0: Check API key
