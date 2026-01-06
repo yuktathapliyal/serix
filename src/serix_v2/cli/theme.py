@@ -32,10 +32,10 @@ COLOR_URL = (
 
 GLOBAL_MARGIN = 2  # Left margin for brand, tagline, section headers
 ITEM_INDENT = 4  # Indent for items inside sections
-FIRST_COL_WIDTH = 28  # Width of command/option column
-MASTER_LANE = 30  # Column where descriptions start (28 + 2 padding)
-OVERFLOW_THRESHOLD = 28  # Commands >= this length go to next line
-CONTENT_WIDTH = 90  # Total content width (aligns subtitle with longest description)
+FIRST_COL_WIDTH = 22  # Width of command/option column
+MASTER_LANE = 24  # Column where descriptions start (22 + 2 padding)
+OVERFLOW_THRESHOLD = 22  # Commands >= this length go to next line
+CONTENT_WIDTH = 84  # Total content width (aligns subtitle with longest description)
 
 # =============================================================================
 # Brand Content
