@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from serix_v2.core.constants import APP_DIR
-from serix_v2.core.contracts import AttackLibrary, StoredAttack
+from serix_v2.core.contracts import AttackLibrary, AttackStatus, StoredAttack
 
 
 class FileAttackStore:
@@ -66,6 +66,8 @@ class FileAttackStore:
         Dedup key: (goal, strategy_id)
         - If attack with same key exists, update it (refresh last_tested)
         - Otherwise, append as new attack
+
+        Phase 12O: Implements streak reset logic for exploited_since.
         """
         library = self.load(attack.target_id)
 
@@ -77,13 +79,43 @@ class FileAttackStore:
         key = (attack.goal, attack.strategy_id)
 
         if key in existing:
-            # Update existing attack (always refresh last_tested)
+            # Update existing attack
+            idx = existing[key]
+            old_attack = library.attacks[idx]
+
+            # Streak reset logic for updates
+            if (
+                old_attack.status == AttackStatus.DEFENDED
+                and attack.status == AttackStatus.EXPLOITED
+            ):
+                # Re-introduced: reset streak to now
+                exploited_since = datetime.now(timezone.utc)
+            elif (
+                old_attack.status == AttackStatus.EXPLOITED
+                and attack.status == AttackStatus.DEFENDED
+            ):
+                # Fixed: clear streak
+                exploited_since = None
+            else:
+                # No change: keep existing streak
+                exploited_since = old_attack.exploited_since
+
             updated_attack = attack.model_copy(
-                update={"last_tested": datetime.now(timezone.utc)}
+                update={
+                    "last_tested": datetime.now(timezone.utc),
+                    "exploited_since": exploited_since,
+                }
             )
-            library.attacks[existing[key]] = updated_attack
+            library.attacks[idx] = updated_attack
         else:
-            # Append new attack
+            # NEW attack - initialize exploited_since if exploited
+            if (
+                attack.status == AttackStatus.EXPLOITED
+                and attack.exploited_since is None
+            ):
+                attack = attack.model_copy(
+                    update={"exploited_since": attack.created_at}
+                )
             library.attacks.append(attack)
 
         self.save(library)

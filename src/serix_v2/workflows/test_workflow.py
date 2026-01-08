@@ -22,8 +22,12 @@ from serix_v2.core.contracts import (
     AttackTransition,
     AttackTurn,
     CampaignResult,
+    ConfirmCallback,
     Grade,
     Persona,
+    ProgressCallback,
+    ProgressEvent,
+    ProgressPhase,
     ResilienceResult,
     ScoreAxis,
     SecurityScore,
@@ -72,6 +76,8 @@ class TestWorkflow:
         llm_provider: LLMProvider,
         attack_store: AttackStore,
         campaign_store: CampaignStore,
+        progress_callback: ProgressCallback | None = None,
+        confirm_callback: ConfirmCallback | None = None,
     ) -> None:
         """
         Initialize the test workflow.
@@ -82,6 +88,8 @@ class TestWorkflow:
             llm_provider: LLM provider for attackers, judge, critic
             attack_store: Storage for attack library
             campaign_store: Storage for campaign results
+            progress_callback: Optional callback for live progress updates
+            confirm_callback: Optional callback for confirmation after regression
         """
         self._config = config
         self._target = target
@@ -89,6 +97,13 @@ class TestWorkflow:
         self._attack_store = attack_store
         self._campaign_store = campaign_store
         self._base_dir = Path(APP_DIR)
+        self._progress_callback = progress_callback
+        self._confirm_callback = confirm_callback
+
+    def _emit(self, event: ProgressEvent) -> None:
+        """Emit a progress event if callback is registered."""
+        if self._progress_callback:
+            self._progress_callback(event)
 
     def run(self) -> CampaignResult:
         """
@@ -121,6 +136,15 @@ class TestWorkflow:
         if self._config.should_run_regression() and library.attacks:
             regression_ran = True
 
+            # Emit regression start event
+            self._emit(
+                ProgressEvent(
+                    phase=ProgressPhase.REGRESSION,
+                    regression_current=0,
+                    regression_total=len(library.attacks),
+                )
+            )
+
             # Create judge for regression evaluation
             judge = LLMJudge(
                 llm_provider=self._llm_provider,
@@ -131,6 +155,7 @@ class TestWorkflow:
             regression_service = RegressionService(
                 judge=judge,
                 target=self._target,
+                progress_callback=self._progress_callback,
             )
 
             regression_result = regression_service.run(
@@ -144,14 +169,55 @@ class TestWorkflow:
             regression_now_defended = regression_result.now_defended
             regression_transitions = regression_result.transitions  # Phase 11
 
+            # Step 4b: Confirmation check if exploits still work
+            if regression_still_exploited > 0 and self._confirm_callback:
+                if not self._confirm_callback(regression_result):
+                    # User declined to continue - return partial result
+                    duration_seconds = time.perf_counter() - start_time
+                    return CampaignResult(
+                        run_id=run_id,
+                        target_id=target_id,
+                        target_locator=self._config.target_path,
+                        target_type=self._infer_target_type(),
+                        target_name=self._config.target_name,
+                        passed=True,  # Didn't fail, just skipped fresh attacks
+                        duration_seconds=duration_seconds,
+                        score=SecurityScore(
+                            overall=Grade.UNKNOWN,
+                            axes={},
+                        ),
+                        attacks=[],
+                        resilience=[],
+                        regression_ran=regression_ran,
+                        regression_replayed=regression_replayed,
+                        regression_still_exploited=regression_still_exploited,
+                        regression_now_defended=regression_now_defended,
+                        regression_transitions=regression_transitions,
+                    )
+
         # Step 5: Security testing phase
         attacks: list[AttackResult] = []
 
         if self._config.should_run_security_tests():
             personas = self._resolve_personas()
+            personas_list = [p.value for p in personas]
+            completed_personas: dict[str, tuple[bool, int]] = {}
 
-            for goal in self._config.goals:
+            for goal_idx, goal in enumerate(self._config.goals):
                 for persona in personas:
+                    # Emit attack start event
+                    self._emit(
+                        ProgressEvent(
+                            phase=ProgressPhase.ATTACKS,
+                            persona=persona.value,
+                            turn=0,
+                            depth=self._config.depth,
+                            goal_index=goal_idx,
+                            total_goals=len(self._config.goals),
+                            personas=personas_list,
+                            completed_personas=completed_personas.copy(),
+                        )
+                    )
                     # Create attacker for this persona
                     attacker = create_attacker(
                         persona=persona,
@@ -180,6 +246,7 @@ class TestWorkflow:
                         attacker=attacker,
                         judge=judge,
                         critic=critic,
+                        progress_callback=self._progress_callback,
                     )
 
                     result = engine.run(
@@ -188,6 +255,12 @@ class TestWorkflow:
                         exhaustive=self._config.exhaustive,
                         mode=self._config.mode,
                         persona=persona,
+                    )
+
+                    # Track completed persona
+                    completed_personas[persona.value] = (
+                        result.success,
+                        len(result.turns),
                     )
 
                     # Populate analysis and healing for successful attacks
