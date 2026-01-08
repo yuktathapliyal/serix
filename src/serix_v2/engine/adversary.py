@@ -24,6 +24,9 @@ from serix_v2.core.contracts import (
     AttackTurn,
     JudgeVerdict,
     Persona,
+    ProgressCallback,
+    ProgressEvent,
+    ProgressPhase,
 )
 from serix_v2.core.protocols import Attacker, Critic, Judge, Target
 
@@ -54,6 +57,7 @@ class AdversaryEngine:
         attacker: Attacker,
         judge: Judge,
         critic: Optional[Critic] = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> None:
         """
         Initialize the AdversaryEngine.
@@ -64,11 +68,18 @@ class AdversaryEngine:
             judge: The judge to evaluate success (implements Judge protocol)
             critic: Optional critic for strategy feedback (implements Critic protocol)
                    Required for ADAPTIVE mode, ignored in STATIC mode.
+            progress_callback: Optional callback for live progress updates
         """
         self._target = target
         self._attacker = attacker
         self._judge = judge
         self._critic = critic
+        self._progress_callback = progress_callback
+
+    def _emit(self, event: ProgressEvent) -> None:
+        """Emit a progress event if callback is registered."""
+        if self._progress_callback:
+            self._progress_callback(event)
 
     def run(
         self,
@@ -98,8 +109,30 @@ class AdversaryEngine:
 
         turn_number = 0
 
+        # Static mode reasoning messages
+        static_reasonings = [
+            "Probing target defenses...",
+            "Analyzing response patterns...",
+            "Attempting extraction technique...",
+            "Testing boundary conditions...",
+            "Escalating attack strategy...",
+        ]
+
         while turn_number < depth:
             turn_number += 1
+
+            # Emit turn progress
+            self._emit(
+                ProgressEvent(
+                    phase=ProgressPhase.ATTACKS,
+                    persona=persona.value,
+                    turn=turn_number,
+                    depth=depth,
+                    reasoning=static_reasonings[
+                        min(turn_number - 1, len(static_reasonings) - 1)
+                    ],
+                )
+            )
 
             # 1. Generate attack payload
             payload = self._attacker.generate(goal, turns)
@@ -153,6 +186,21 @@ class AdversaryEngine:
                 )
                 temp_turns = turns + [temp_turn]
                 critic_feedback = self._critic.evaluate(goal, temp_turns)
+
+                # Emit progress with critic's reasoning (truncated for display)
+                if critic_feedback and critic_feedback.reasoning:
+                    reasoning = critic_feedback.reasoning[:80]
+                    if len(critic_feedback.reasoning) > 80:
+                        reasoning = reasoning.rsplit(" ", 1)[0] + "..."
+                    self._emit(
+                        ProgressEvent(
+                            phase=ProgressPhase.ATTACKS,
+                            persona=persona.value,
+                            turn=turn_number,
+                            depth=depth,
+                            reasoning=reasoning,
+                        )
+                    )
 
             # 6. Create the complete turn
             turn = AttackTurn(
