@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+from serix.sdk.decorator import _scanned_functions, get_system_prompt
 from serix_v2.core.id_gen import generate_target_id
 
 if TYPE_CHECKING:
@@ -159,6 +160,43 @@ class PythonFunctionTarget:
     def locator(self) -> str:
         """Original locator string."""
         return self._locator
+
+    @property
+    def system_prompt(self) -> str | None:
+        """Extract system prompt from @serix.scan() decorator if present.
+
+        Returns:
+            The system_prompt string from the decorator, or None if not found.
+        """
+        return self._extract_system_prompt()
+
+    def _extract_system_prompt(self) -> str | None:
+        """Look up system prompt from the scanned functions registry.
+
+        Checks both the direct function and registry lookups.
+
+        Returns:
+            The system_prompt string if found, None otherwise.
+        """
+        # First try direct extraction from the function (handles Agent subclasses too)
+        prompt = get_system_prompt(self._func)
+        if prompt:
+            return prompt
+
+        # For bound methods (Class.method), check the instance itself
+        # This handles serix.Agent subclasses where config is on the class
+        if hasattr(self._func, "__self__"):
+            instance = self._func.__self__
+            prompt = get_system_prompt(instance)
+            if prompt:
+                return prompt
+
+        # Check the global registry for full module.function names
+        for key, scanned in _scanned_functions.items():
+            if scanned.func is self._func:
+                return scanned.config.system_prompt
+
+        return None
 
     def __call__(self, message: str) -> str:
         """Send a message to the target and get a response.
