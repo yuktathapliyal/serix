@@ -22,6 +22,9 @@ _TEMPLATE_V030 = r"""# =========================================================
 # Docs: https://github.com/yuktathapliyal/serix
 # ============================================================================
 
+# LLM provider: openai, anthropic, google (auto-detects from API keys if omitted)
+# provider = "openai"
+
 # ----------------------------------------------------------------------------
 # TARGET — What agent to test (REQUIRED)
 # ----------------------------------------------------------------------------
