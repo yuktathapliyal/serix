@@ -14,6 +14,38 @@ from typing import Any
 import litellm
 
 
+def normalize_model(model: str) -> str:
+    """Normalize model name for litellm routing.
+
+    Newer model names (claude-haiku-4-*, claude-sonnet-4-*, gemini-2.0-*)
+    aren't auto-detected by litellm. This adds provider prefix when needed.
+
+    Args:
+        model: Model name (e.g., "claude-haiku-4-20250514")
+
+    Returns:
+        Normalized model name with prefix if needed.
+    """
+    # Already prefixed - return as-is
+    if "/" in model:
+        return model
+
+    # OpenAI models are auto-detected by litellm
+    if model.startswith("gpt-") or model.startswith("o1"):
+        return model
+
+    # Anthropic models need prefix for newer names
+    if model.startswith("claude"):
+        return f"anthropic/{model}"
+
+    # Google models need prefix
+    if model.startswith("gemini"):
+        return f"gemini/{model}"
+
+    # Unknown - return as-is (let litellm handle)
+    return model
+
+
 class LiteLLMProvider:
     """LLMProvider implementation using LiteLLM for multi-provider support.
 
@@ -75,8 +107,11 @@ class LiteLLMProvider:
         Raises:
             litellm.exceptions.*: Various LiteLLM exceptions on API errors.
         """
+        # Normalize model name for litellm routing (newer models need prefixes)
+        normalized_model = normalize_model(model)
+
         response = litellm.completion(
-            model=model,
+            model=normalized_model,
             messages=messages,
             temperature=temperature,
         )
@@ -105,8 +140,11 @@ class LiteLLMProvider:
         Returns:
             Dict with "content", "model", "usage", and "raw_response".
         """
+        # Normalize model name for litellm routing (newer models need prefixes)
+        normalized_model = normalize_model(model)
+
         response = litellm.completion(
-            model=model,
+            model=normalized_model,
             messages=messages,
             temperature=temperature,
             **kwargs,
