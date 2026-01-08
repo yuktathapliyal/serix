@@ -150,14 +150,15 @@ class TestSerixSessionConfigHelpers:
         )
         assert config.should_generate_patch() is False
 
-    def test_should_generate_patch_false_when_no_system_prompt(self) -> None:
-        """No system_prompt means no patch (nothing to patch)."""
+    def test_should_generate_patch_true_when_no_system_prompt(self) -> None:
+        """No system_prompt still allows recommendations-only patches."""
         config = SerixSessionConfig(
             target_path="test.py:fn",
             no_patch=False,
             system_prompt=None,
         )
-        assert config.should_generate_patch() is False
+        # Patcher generates architectural recommendations even without system_prompt
+        assert config.should_generate_patch() is True
 
     def test_should_generate_patch_true_when_enabled_with_prompt(self) -> None:
         """Patch generation requires both no_patch=False and system_prompt."""

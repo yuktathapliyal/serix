@@ -489,7 +489,7 @@ class TestResolveFunctions:
 
     def test_resolve_skip_regression_cli_wins(self):
         """CLI skip_regression should win."""
-        result = resolve_skip_regression(True, True)
+        result = resolve_skip_regression(True, True, True)
         assert result is True  # CLI says skip
 
     def test_resolve_exhaustive_cli_wins(self):

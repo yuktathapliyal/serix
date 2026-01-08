@@ -138,7 +138,7 @@ class TestTemplateComments:
         """[regression] section should be in template (as comment)."""
         template = init_service.get_template()
         assert "# [regression]" in template
-        assert "--skip-regression inverts" in template
+        assert "# skip_regression = false" in template
 
     def test_output_section_commented(self, init_service: InitService) -> None:
         """[output] section should be in template (as comment)."""
