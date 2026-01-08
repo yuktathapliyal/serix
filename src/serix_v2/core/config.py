@@ -53,6 +53,12 @@ class SerixSessionConfig(BaseModel):
     exhaustive: bool = False  # --exhaustive
 
     # ========================================================================
+    # PROVIDER (Phase 13 - Multi-Provider Profiles)
+    # ========================================================================
+    provider: Optional[str] = None  # --provider (openai, anthropic, google)
+    provider_auto_detected: bool = False  # True if provider was auto-detected
+
+    # ========================================================================
     # MODELS (Spec 1.8)
     # ========================================================================
     attacker_model: str = constants.DEFAULT_ATTACKER_MODEL  # --attacker-model
@@ -129,8 +135,13 @@ class SerixSessionConfig(BaseModel):
         return not self.no_report and not self.dry_run
 
     def should_generate_patch(self) -> bool:
-        """Returns False if --no-patch is set or no system_prompt provided."""
-        return not self.no_patch and self.system_prompt is not None
+        """Whether to run the patcher for patches and/or recommendations.
+
+        Note: Even without a system prompt, the patcher generates rule-based
+        architectural recommendations. The patcher handles missing prompts
+        internally by returning recommendations only.
+        """
+        return not self.no_patch
 
     def is_interactive(self) -> bool:
         """Returns False if --yes or --github is set."""
