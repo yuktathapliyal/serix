@@ -40,6 +40,7 @@ dependencies = [
     "tomli>=2.0.0;python_version<'3.11'",
     "litellm>=1.0.0",
     "rich-gradient>=0.3.9",
+    "tenacity>=8.2.0",
 ]
 
 [project.urls]
