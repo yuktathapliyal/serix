@@ -210,32 +210,26 @@ def test(
         str | None,
         typer.Option(
             "--attacker-model",
-            help="Model for attack generation (default: gpt-4o-mini)",
+            help="Model for attack generation",
         ),
     ] = None,
     judge_model: Annotated[
         str | None,
-        typer.Option(
-            "--judge-model", help="Model for attack evaluation (default: gpt-4o)"
-        ),
+        typer.Option("--judge-model", help="Model for attack evaluation"),
     ] = None,
     critic_model: Annotated[
         str | None,
-        typer.Option(
-            "--critic-model", help="Model for per-turn feedback (default: gpt-4o-mini)"
-        ),
+        typer.Option("--critic-model", help="Model for per-turn feedback"),
     ] = None,
     patcher_model: Annotated[
         str | None,
-        typer.Option(
-            "--patcher-model", help="Model for patch generation (default: gpt-4o)"
-        ),
+        typer.Option("--patcher-model", help="Model for patch generation"),
     ] = None,
     analyzer_model: Annotated[
         str | None,
         typer.Option(
             "--analyzer-model",
-            help="Model for vulnerability analysis (default: gpt-4o-mini)",
+            help="Model for vulnerability analysis",
         ),
     ] = None,
     # HTTP target configuration

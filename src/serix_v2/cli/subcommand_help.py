@@ -47,6 +47,9 @@ TEST_CORE_OPTIONS = {
     "-s",
     "--depth",
     "-d",
+    # Provider
+    "--provider",
+    "-p",
     # Reports
     "--report",
     "-r",
@@ -86,6 +89,7 @@ TEST_CATEGORIES: dict[str, list[str]] = {
         "--fuzz-probability",
     ],
     "Models": [
+        "--provider",
         "--attacker-model",
         "--judge-model",
         "--critic-model",
@@ -106,6 +110,7 @@ TEST_CATEGORIES: dict[str, list[str]] = {
 # Categories shown in core --help only
 TEST_CORE_CATEGORIES = [
     "Core",
+    "Models",
     "Reports & Artifacts",
     "HTTP Targeting",
     "Behavior",
