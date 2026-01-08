@@ -17,13 +17,23 @@ from rich_gradient.text import Text as GradientText
 # Clean, premium, memorable - intentional 2-color gradient
 BRAND_GRADIENT_COLORS = ["#ff375f", "#bf5af2"]  # Pink → Purple
 
-# Semantic colors
+# Semantic text colors
 COLOR_COMMAND = "#f8f4ff bold"  # Magnolia + bold - actionable items users type
 COLOR_GOAL = "#6AB8D8"  # Muted Apple Cyan - desaturated cyan for user input/goals
 COLOR_DIM = "#a8a0b0"  # Silver Purple - warm gray with purple undertone
 COLOR_SUBTITLE = "#b8b0c0"  # Lifted Silver - header-level muted, above body text
 COLOR_URL = (
     "#a8a0b0 underline"  # Silver Purple - blends with palette, underline for affordance
+)
+
+# Semantic status colors (brand-aligned)
+COLOR_SUCCESS = "#5ac08b"  # Muted Sage - defended, checkmarks, success
+COLOR_ERROR = "#ff6b6b"  # Coral Red - exploited, errors, failures
+COLOR_WARNING = "#d4aa70"  # Soft Gold - warnings, cautions (muted to match cyan)
+
+# Focal point color
+COLOR_GRADE = (
+    "#5AC8FA"  # Bright Cyan - hero color for grade verdict (pops without alarm)
 )
 
 # =============================================================================

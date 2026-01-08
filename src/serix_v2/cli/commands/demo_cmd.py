@@ -10,6 +10,8 @@ This stub exists so gate.sh smoke tests pass.
 import typer
 from rich.console import Console
 
+from serix_v2.cli.theme import COLOR_WARNING
+
 console = Console()
 
 
@@ -22,10 +24,12 @@ def demo(
 ) -> None:
     """Run bundled vulnerable agent demo (coming in Phase 11C)."""
     console.print()
-    console.print("  [yellow]⚠[/yellow] Demo command not yet implemented")
+    console.print(
+        f"  [{COLOR_WARNING}]⚠[/{COLOR_WARNING}] Demo command not yet implemented"
+    )
     console.print()
     console.print("  The demo command will be available in Phase 11C.")
-    console.print("  For now, use [cyan]serix test[/cyan] with your own agent:")
+    console.print("  For now, use [dim]serix test[/dim] with your own agent:")
     console.print()
     console.print('    serix test agent.py:my_agent --goal "reveal secrets"')
     console.print()

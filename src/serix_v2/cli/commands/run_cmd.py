@@ -13,6 +13,8 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
+from serix_v2.cli.theme import COLOR_WARNING
+
 console = Console()
 
 
@@ -40,12 +42,14 @@ def run(
 ) -> None:
     """Run a Python script with optional fuzzing (v0.2 compatibility mode)."""
     console.print()
-    console.print("  [yellow]⚠[/yellow] The 'run' command is deprecated in v0.3.0")
+    console.print(
+        f"  [{COLOR_WARNING}]⚠[/{COLOR_WARNING}] The 'run' command is deprecated in v0.3.0"
+    )
     console.print()
-    console.print("  Use [cyan]serix dev[/cyan] instead for script execution:")
+    console.print("  Use [dim]serix dev[/dim] instead for script execution:")
     console.print(f"    serix dev {script}")
     console.print()
-    console.print("  Or use [cyan]serix test[/cyan] for security testing:")
+    console.print("  Or use [dim]serix test[/dim] for security testing:")
     console.print(f'    serix test {script}:function_name --goal "..."')
     console.print()
     raise typer.Exit(0)
