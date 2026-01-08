@@ -97,6 +97,7 @@ class TomlConfig(BaseModel):
     fuzz: TomlFuzzConfig = Field(default_factory=TomlFuzzConfig)
 
     # Root-level fields (not in a section)
+    provider: str | None = None  # LLM provider profile (openai, anthropic, google)
     verbose: bool | None = None
     yes: bool | None = None
     exhaustive: bool | None = None

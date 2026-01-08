@@ -45,6 +45,9 @@ class CLIOverrides(BaseModel):
     depth: int | None = None
     exhaustive: bool | None = None
 
+    # Provider (Phase 13)
+    provider: str | None = None
+
     # Models
     attacker_model: str | None = None
     judge_model: str | None = None
@@ -428,12 +431,40 @@ def resolve_config(
     )
 
     # ========================================================================
+    # PROVIDER (Phase 13 - Multi-Provider Profiles)
+    # ========================================================================
+    # Priority: CLI --provider > toml provider > auto-detect from env vars
+    effective_provider = _first_non_none(
+        cli.provider,
+        toml.provider,
+        constants.detect_provider(),  # Auto-detect from API keys
+    )
+
+    # Track if provider was auto-detected (for display)
+    provider_auto_detected = (
+        cli.provider is None
+        and toml.provider is None
+        and effective_provider is not None
+    )
+
+    # Get profile models if provider is set
+    profile_models: dict[str, str] = {}
+    if effective_provider:
+        try:
+            profile_models = constants.get_profile_models(effective_provider)
+        except ValueError:
+            # Unknown provider - will be caught later or use defaults
+            pass
+
+    # ========================================================================
     # MODELS
     # ========================================================================
+    # Priority: CLI model > env model > toml model > profile model > default
     attacker_model = _first_non_none(
         cli.attacker_model,
         env_overrides.get("attacker_model"),
         toml.models.attacker,
+        profile_models.get("attacker"),
         constants.DEFAULT_ATTACKER_MODEL,
     )
 
@@ -441,6 +472,7 @@ def resolve_config(
         cli.judge_model,
         env_overrides.get("judge_model"),
         toml.models.judge,
+        profile_models.get("judge"),
         constants.DEFAULT_JUDGE_MODEL,
     )
 
@@ -448,6 +480,7 @@ def resolve_config(
         cli.critic_model,
         env_overrides.get("critic_model"),
         toml.models.critic,
+        profile_models.get("critic"),
         constants.DEFAULT_CRITIC_MODEL,
     )
 
@@ -455,6 +488,7 @@ def resolve_config(
         cli.patcher_model,
         env_overrides.get("patcher_model"),
         toml.models.patcher,
+        profile_models.get("patcher"),
         constants.DEFAULT_PATCHER_MODEL,
     )
 
@@ -462,6 +496,7 @@ def resolve_config(
         cli.analyzer_model,
         env_overrides.get("analyzer_model"),
         toml.models.analyzer,
+        profile_models.get("analyzer"),
         constants.DEFAULT_ANALYZER_MODEL,
     )
 
@@ -552,6 +587,9 @@ def resolve_config(
         scenarios=scenarios,
         depth=depth,
         exhaustive=exhaustive,
+        # Provider
+        provider=effective_provider,
+        provider_auto_detected=provider_auto_detected,
         # Models
         attacker_model=attacker_model,
         judge_model=judge_model,
