@@ -7,6 +7,8 @@ Law 3: Depends on Judge and Target protocols, not concrete classes.
 Reference: Phase 5 Plan
 """
 
+import logging
+
 from serix_v2.core.contracts import (
     _utc_now,  # Law 1 consistency - use shared timestamp helper
 )
@@ -21,6 +23,8 @@ from serix_v2.core.contracts import (
     StoredAttack,
 )
 from serix_v2.core.protocols import Judge, Target
+
+logger = logging.getLogger(__name__)
 
 
 class RegressionService:
@@ -181,11 +185,12 @@ class RegressionService:
             # Phase 11: Capture verdict details for report
             verdict_reasoning = verdict.reasoning
             verdict_confidence = verdict.confidence
-        except Exception:
-            # Conservative: crashed target = defended
+        except Exception as e:
+            # Conservative: crashed target = defended (can't exploit a crashed agent)
+            logger.warning(f"Target crashed during replay of attack {attack.id}: {e}")
             current_status = AttackStatus.DEFENDED
-            response = "[Target crashed during replay]"
-            verdict_reasoning = "Target threw exception during replay"
+            response = f"[Target crashed during replay: {type(e).__name__}]"
+            verdict_reasoning = f"Target threw {type(e).__name__} during replay"
             verdict_confidence = 1.0  # Certain it's defended
 
         return AttackTransition(

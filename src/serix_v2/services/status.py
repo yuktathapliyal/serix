@@ -12,13 +12,17 @@ Law Compliance:
 Reference: Phase 11B, Spec 2.4
 """
 
+import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from serix_v2.core.constants import APP_DIR
 from serix_v2.core.contracts import AttackLibrary, AttackStatus, TargetMetadata
+
+logger = logging.getLogger(__name__)
 
 
 class TargetStatus(BaseModel):
@@ -143,8 +147,8 @@ class StatusService:
                     )
                     if metadata.name == name:
                         return self._load_target_status(target_dir.name, target_dir)
-                except Exception:
-                    # Skip malformed metadata files
+                except (json.JSONDecodeError, ValidationError) as e:
+                    logger.debug(f"Failed to parse metadata at {metadata_path}: {e}")
                     continue
         return None
 
@@ -185,7 +189,8 @@ class StatusService:
 
         try:
             metadata = TargetMetadata.model_validate_json(metadata_path.read_text())
-        except Exception:
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.debug(f"Failed to parse metadata at {metadata_path}: {e}")
             return None
 
         # Load attacks (optional - target may exist without attacks)
@@ -194,8 +199,8 @@ class StatusService:
             try:
                 library = AttackLibrary.model_validate_json(attacks_path.read_text())
                 attacks = library.attacks
-            except Exception:
-                pass
+            except (json.JSONDecodeError, ValidationError) as e:
+                logger.debug(f"Failed to parse attacks at {attacks_path}: {e}")
 
         # Count by status
         exploited = sum(1 for a in attacks if a.status == AttackStatus.EXPLOITED)

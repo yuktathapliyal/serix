@@ -14,10 +14,13 @@ Law 4: No module-level globals - all state in class instances
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from serix_v2.report.schema import (
@@ -361,8 +364,10 @@ def write_github_output(output: GitHubOutput) -> bool:
                 f.write(output.summary)
                 f.write("\n")
             wrote = True
-        except OSError:
-            pass  # Silently fail if can't write
+        except OSError as e:
+            logger.warning(
+                f"Failed to write GitHub step summary to {summary_file}: {e}"
+            )
 
     return wrote
 

@@ -94,6 +94,11 @@ def prompt_api_key_entry(provider: str) -> str | None:
 
         key = key.strip()
 
+        # Strip accidental ENV_VAR= prefix (user may paste whole line from .env)
+        env_var = PROVIDER_ENV_VARS.get(provider, f"{provider.upper()}_API_KEY")
+        if key.startswith(f"{env_var}="):
+            key = key[len(f"{env_var}=") :]
+
         # Validate the key
         console.print("  Validating... ", end="")
         result = validate_key(provider, key)

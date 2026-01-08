@@ -74,6 +74,7 @@ class Grade(str, Enum):
     C = "C"
     D = "D"
     F = "F"
+    UNKNOWN = "?"  # Used when test was cancelled or couldn't complete
 
 
 class ProgressPhase(str, Enum):

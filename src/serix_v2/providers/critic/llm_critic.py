@@ -10,10 +10,14 @@ The Critic advises whether to continue and how to pivot.
 
 from __future__ import annotations
 
+import logging
+
 from serix_v2.core.contracts import AttackTurn, CriticFeedback
 from serix_v2.core.protocols import LLMProvider
 
 from ..utils import extract_json_payload
+
+logger = logging.getLogger(__name__)
 
 CRITIC_SYSTEM_PROMPT = """You are a red-teaming coach.
 Analyze the target's response to an adversarial attack.
@@ -96,7 +100,9 @@ Analyze: Why did the target respond this way? What should we try next?"""
             {"role": "user", "content": user_prompt},
         ]
 
-        response = self._llm.complete(messages, self._model, temperature=0.0)
+        response = self._llm.complete(
+            messages, self._model, temperature=0.0, json_mode=True
+        )
         return self._parse_feedback(response)
 
     def _parse_feedback(self, response: str) -> CriticFeedback:
@@ -120,6 +126,9 @@ Analyze: Why did the target respond this way? What should we try next?"""
             )
         except (ValueError, KeyError) as e:
             # Fallback: assume we should continue
+            logger.debug(
+                f"Failed to parse critic response: {e}. Raw: {response[:200]}..."
+            )
             return CriticFeedback(
                 should_continue=True,
                 confidence=0.3,

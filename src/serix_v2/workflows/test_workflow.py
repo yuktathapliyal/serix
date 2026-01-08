@@ -183,8 +183,9 @@ class TestWorkflow:
                         passed=True,  # Didn't fail, just skipped fresh attacks
                         duration_seconds=duration_seconds,
                         score=SecurityScore(
-                            overall=Grade.UNKNOWN,
-                            axes={},
+                            overall_score=0,
+                            grade=Grade.UNKNOWN,
+                            axes=[],
                         ),
                         attacks=[],
                         resilience=[],

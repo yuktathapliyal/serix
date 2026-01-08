@@ -14,6 +14,7 @@ Guardrails:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -51,6 +52,7 @@ from serix_v2.storage import FileAttackStore, FileCampaignStore
 from serix_v2.targets import resolve_target
 from serix_v2.workflows import TestWorkflow
 
+logger = logging.getLogger(__name__)
 console = Console()
 
 
@@ -69,8 +71,8 @@ def _resolve_alias(target_arg: str | None) -> str | None:
             index = TargetIndex.model_validate_json(index_path.read_text())
             if target_arg in index.aliases:
                 return index.aliases[target_arg]
-        except Exception:
-            pass
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.debug(f"Failed to parse target index at {index_path}: {e}")
 
     return target_arg
 

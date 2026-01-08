@@ -191,6 +191,7 @@ class MockLLMProvider:
         messages: list[dict[str, str]],
         model: str,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> str:
         """Return the next response in sequence, cycling if needed."""
         response = self._responses[self._call_count % len(self._responses)]

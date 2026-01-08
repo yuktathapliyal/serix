@@ -912,6 +912,10 @@ def handle_auth_error(provider: str | None, is_interactive: bool) -> bool:
 
         new_key = new_key.strip()
 
+        # Strip accidental ENV_VAR= prefix (user may paste whole line from .env)
+        if new_key.startswith(f"{env_var}="):
+            new_key = new_key[len(f"{env_var}=") :]
+
         # Validate the new key
         console.print(f"  [{COLOR_DIM}]Validating...[/{COLOR_DIM}]", end="")
         result = validate_key(provider or "openai", new_key)
