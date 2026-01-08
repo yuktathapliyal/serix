@@ -11,7 +11,7 @@ Reference: Spec 1.16 (JSON Schema), Developer Checklist
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 from pydantic import BaseModel, Field
 
@@ -74,6 +74,15 @@ class Grade(str, Enum):
     C = "C"
     D = "D"
     F = "F"
+
+
+class ProgressPhase(str, Enum):
+    """Phase of campaign execution for progress reporting."""
+
+    REGRESSION = "regression"
+    ATTACKS = "attacks"
+    FUZZ = "fuzz"
+    COMPLETE = "complete"
 
 
 # ============================================================================
@@ -163,6 +172,7 @@ class AttackTransition(BaseModel):
     - "Last run: Defended. This run: Exploited" = Regression!
 
     Phase 11: Added response + verdict fields for transcript capture.
+    Phase 12O: Added owasp_code + exploited_since for findings display.
     """
 
     attack_id: str
@@ -176,6 +186,10 @@ class AttackTransition(BaseModel):
     response: Optional[str] = None  # Target's response during replay
     verdict_reasoning: Optional[str] = None  # Judge's explanation
     verdict_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    # Phase 12O: For findings display and deduplication
+    owasp_code: Optional[str] = None  # Copy from StoredAttack
+    exploited_since: Optional[datetime] = None  # Streak tracking for lifecycle
 
     @property
     def is_still_defended(self) -> bool:
@@ -375,6 +389,7 @@ class StoredAttack(BaseModel):
     owasp_code: Optional[str] = None
     created_at: datetime = Field(default_factory=_utc_now)
     last_tested: datetime = Field(default_factory=_utc_now)
+    exploited_since: Optional[datetime] = None  # Streak tracking for lifecycle
 
 
 class AttackLibrary(BaseModel):
@@ -479,3 +494,52 @@ class InitResult(BaseModel):
 
     template: str
     version: str = "0.3.0"
+
+
+# ============================================================================
+# PROGRESS EVENTS (For live CLI progress display)
+# ============================================================================
+
+
+class ProgressEvent(BaseModel):
+    """
+    Progress event emitted during campaign execution.
+
+    Law 2 Compliant: This is a plain Pydantic model with no Rich imports.
+    The CLI layer handles rendering based on these events.
+    """
+
+    phase: ProgressPhase
+
+    # Regression phase
+    regression_current: int = 0
+    regression_total: int = 0
+    regression_now_defended: int = 0
+    regression_still_exploited: int = 0
+
+    # Attack phase
+    persona: Optional[str] = None
+    turn: int = 0
+    depth: int = 0
+    goal_index: int = 0
+    total_goals: int = 0
+
+    # Attack status (for completed attacks)
+    attack_complete: bool = False
+    attack_success: Optional[bool] = None  # True=exploited, False=defended
+
+    # All personas for display state
+    personas: list[str] = Field(default_factory=list)
+    completed_personas: dict[str, tuple[bool, int]] = Field(
+        default_factory=dict
+    )  # persona -> (success, turns)
+
+    # Reasoning feed (from Critic/Attacker for "thinking" display)
+    reasoning: Optional[str] = None
+
+
+# Type alias for progress callback function
+ProgressCallback = Callable[[ProgressEvent], None]
+
+# Type alias for confirmation callback (returns True to continue, False to abort)
+ConfirmCallback = Callable[["RegressionResult"], bool]
