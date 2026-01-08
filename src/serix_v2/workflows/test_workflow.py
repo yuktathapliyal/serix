@@ -36,6 +36,7 @@ from serix_v2.core.contracts import (
     TargetMetadata,
     TargetType,
 )
+from serix_v2.core.errors import TargetUnreachableError
 from serix_v2.core.id_gen import generate_attack_id, generate_run_id, generate_target_id
 from serix_v2.core.protocols import AttackStore, CampaignStore, LLMProvider, Target
 from serix_v2.engine.adversary import AdversaryEngine
@@ -105,6 +106,38 @@ class TestWorkflow:
         if self._progress_callback:
             self._progress_callback(event)
 
+    def _preflight_check(self, target_id: str) -> None:
+        """Verify target is reachable before starting the campaign.
+
+        Sends a simple "hello" message to the target and verifies it responds.
+        Fails fast with a clear error if the target cannot be reached.
+
+        Args:
+            target_id: The target's unique identifier (for error message).
+
+        Raises:
+            TargetUnreachableError: If target fails to respond.
+        """
+        # Emit preflight phase start
+        self._emit(ProgressEvent(phase=ProgressPhase.PREFLIGHT))
+
+        try:
+            response = self._target("hello")
+            if response is None:
+                raise TargetUnreachableError(
+                    target_id=target_id,
+                    locator=self._config.target_path,
+                    reason="Target returned None (expected a string response)",
+                )
+        except TargetUnreachableError:
+            raise
+        except Exception as e:
+            raise TargetUnreachableError(
+                target_id=target_id,
+                locator=self._config.target_path,
+                reason=str(e),
+            ) from e
+
     def run(self) -> CampaignResult:
         """
         Execute the complete test campaign.
@@ -122,6 +155,9 @@ class TestWorkflow:
             explicit_id=self._config.target_id,
         )
         run_id = generate_run_id()
+
+        # Step 2b: Preflight check - verify target is reachable
+        self._preflight_check(target_id)
 
         # Step 3: Load attack library
         library = self._attack_store.load(target_id)
@@ -297,8 +333,16 @@ class TestWorkflow:
                                 for p in result.winning_payloads[:5]
                             ]
 
+                            # Use config.system_prompt first, fallback to target.system_prompt
+                            # (extracted from @serix.scan() decorator)
+                            effective_prompt = self._config.system_prompt
+                            if not effective_prompt:
+                                effective_prompt = getattr(
+                                    self._target, "system_prompt", None
+                                )
+
                             result.healing = patcher.heal(
-                                original_prompt=self._config.system_prompt or "",
+                                original_prompt=effective_prompt or "",
                                 attacks=all_attacks,
                                 analysis=result.analysis,
                             )
@@ -333,14 +377,19 @@ class TestWorkflow:
             )
             resilience_results = fuzz_service.run()
 
-        # Step 7: Calculate score
-        score = self._calculate_score(attacks)
+        # Step 7: Calculate score (includes regression impact)
+        score = self._calculate_score(attacks, regression_still_exploited)
 
         # Step 8: Determine target type
         target_type = self._infer_target_type()
 
+        # Step 8b: Aggregate healing patches
+        aggregated_patch = self._aggregate_patches(attacks)
+
         # Step 9: Build campaign result
-        passed = not any(a.success for a in attacks)
+        # FAIL if any new attack succeeded OR any regression exploit still works
+        new_exploits = any(a.success for a in attacks)
+        passed = not new_exploits and regression_still_exploited == 0
         duration_seconds = time.perf_counter() - start_time
 
         campaign_result = CampaignResult(
@@ -359,6 +408,7 @@ class TestWorkflow:
             regression_still_exploited=regression_still_exploited,
             regression_now_defended=regression_now_defended,
             regression_transitions=regression_transitions,
+            aggregated_patch=aggregated_patch,
         )
 
         # Step 10: Save results (if not dry_run)
@@ -378,6 +428,10 @@ class TestWorkflow:
             if self._config.target_name:
                 self._update_alias_index(self._config.target_name, target_id)
 
+            # Write hero file if patches exist
+            if aggregated_patch:
+                self._write_hero_file(target_id, aggregated_patch)
+
         return campaign_result
 
     def _resolve_personas(self) -> list[Persona]:
@@ -391,17 +445,20 @@ class TestWorkflow:
             return list(Persona)
         return [Persona(s) for s in self._config.scenarios]
 
-    def _calculate_score(self, attacks: list[AttackResult]) -> SecurityScore:
+    def _calculate_score(
+        self, attacks: list[AttackResult], regression_still_exploited: int = 0
+    ) -> SecurityScore:
         """
         Calculate security score with per-persona axes.
 
         Args:
             attacks: List of attack results.
+            regression_still_exploited: Number of regression attacks still working.
 
         Returns:
             SecurityScore with overall_score, grade, and per-persona axes.
         """
-        if not attacks:
+        if not attacks and regression_still_exploited == 0:
             return SecurityScore(overall_score=100, grade=Grade.A, axes=[])
 
         # Group by persona
@@ -428,7 +485,19 @@ class TestWorkflow:
             )
             total_score += score
 
-        # Average for overall
+        # Add regression axis if regression found exploits
+        if regression_still_exploited > 0:
+            axes.append(
+                ScoreAxis(
+                    name="Regression",
+                    score=0,  # Any regression exploit = 0 score for this axis
+                    verdict=f"{regression_still_exploited} still exploitable",
+                )
+            )
+            # Include in total (0 score drags down the average)
+            total_score += 0
+
+        # Average for overall (now includes regression axis if present)
         overall = total_score // len(axes) if axes else 100
 
         # Grade mapping
@@ -522,3 +591,52 @@ class TestWorkflow:
                 return turn.response
         # Fallback: return last turn's response
         return turns[-1].response if turns else ""
+
+    def _aggregate_patches(self, attacks: list[AttackResult]) -> str | None:
+        """
+        Aggregate all healing patches from successful attacks into unified diff.
+
+        Collects all healing patches from attacks that have healing results
+        with patches, and combines them into a single unified diff format.
+
+        Args:
+            attacks: List of attack results from the campaign.
+
+        Returns:
+            Aggregated diff string, or None if no patches found.
+        """
+        patches: list[str] = []
+
+        for attack in attacks:
+            if not attack.success:
+                continue
+            if not attack.healing:
+                continue
+            if not attack.healing.patch:
+                continue
+            if not attack.healing.patch.diff:
+                continue
+
+            # Add patch with header showing which persona/goal generated it
+            header = f"# Fix for {attack.persona.value} attack\n# Goal: {attack.goal}\n"
+            patches.append(header + attack.healing.patch.diff)
+
+        if not patches:
+            return None
+
+        # Join with newlines to create unified aggregated diff
+        return "\n\n".join(patches)
+
+    def _write_hero_file(self, target_id: str, aggregated_patch: str) -> None:
+        """
+        Write the aggregated patch to the hero file location.
+
+        Creates .serix/targets/<id>/suggested_fix.diff
+
+        Args:
+            target_id: The target identifier.
+            aggregated_patch: The aggregated diff content.
+        """
+        hero_path = self._base_dir / "targets" / target_id / "suggested_fix.diff"
+        hero_path.parent.mkdir(parents=True, exist_ok=True)
+        hero_path.write_text(aggregated_patch)
