@@ -12,27 +12,35 @@ Modules:
 """
 
 from serix_v2.cli.renderers.console import (
+    handle_auth_error,
+    render_api_error,
+    render_auth_error,
     render_campaign_result,
+    render_findings,
     render_grade_panel,
     render_init_exists,
     render_init_success,
+    render_mixed_provider_warning,
     render_no_targets_found,
     render_status_table,
     render_target_not_found,
-    render_vulnerabilities,
 )
 from serix_v2.cli.renderers.github import write_github_annotations, write_step_summary
 
 __all__ = [
     # Console renderers
+    "handle_auth_error",
+    "render_api_error",
+    "render_auth_error",
     "render_campaign_result",
+    "render_findings",
     "render_grade_panel",
     "render_init_exists",
     "render_init_success",
+    "render_mixed_provider_warning",
     "render_no_targets_found",
     "render_status_table",
     "render_target_not_found",
-    "render_vulnerabilities",
     # GitHub renderers
     "write_github_annotations",
     "write_step_summary",

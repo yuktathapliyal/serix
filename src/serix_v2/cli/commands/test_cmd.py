@@ -18,21 +18,35 @@ import os
 from pathlib import Path
 from typing import Annotated
 
+import litellm
+import openai
 import typer
 from rich.console import Console
+from rich.prompt import Confirm
 
 from serix_v2.cli.renderers.console import (
+    LiveProgressDisplay,
+    handle_auth_error,
+    render_api_error,
     render_api_key_missing,
     render_campaign_header,
     render_campaign_result,
-    render_healing_patch,
+    render_mixed_provider_warning,
     render_no_goal_error,
 )
 from serix_v2.cli.renderers.github import write_github_annotations, write_step_summary
+from serix_v2.cli.theme import COLOR_DIM, COLOR_ERROR, COLOR_WARNING
 from serix_v2.config import CLIOverrides, load_toml_config, resolve_config
-from serix_v2.core.contracts import TargetIndex
+from serix_v2.core.config import SerixSessionConfig
+from serix_v2.core.contracts import (
+    ConfirmCallback,
+    Persona,
+    ProgressEvent,
+    RegressionResult,
+    TargetIndex,
+)
 from serix_v2.providers import LiteLLMProvider
-from serix_v2.report import HTMLReportGenerator, write_html_report
+from serix_v2.report import transform_campaign_result, write_html_report
 from serix_v2.storage import FileAttackStore, FileCampaignStore
 from serix_v2.targets import resolve_target
 from serix_v2.workflows import TestWorkflow
@@ -61,12 +75,22 @@ def _resolve_alias(target_arg: str | None) -> str | None:
     return target_arg
 
 
-def _check_api_key() -> bool:
-    """Check if any LLM API key is configured."""
+def _check_api_key(provider: str | None = None) -> bool:
+    """Check if API key is configured for specified or any provider."""
+    if provider:
+        from serix_v2.core.constants import PROVIDER_ENV_VARS
+
+        env_var = PROVIDER_ENV_VARS.get(provider)
+        if env_var:
+            return bool(os.environ.get(env_var))
+        return False
+
+    # Check for any API key
     return any(
         [
             os.environ.get("OPENAI_API_KEY"),
             os.environ.get("ANTHROPIC_API_KEY"),
+            os.environ.get("GOOGLE_API_KEY"),
             os.environ.get("LITELLM_API_KEY"),
         ]
     )
@@ -81,6 +105,55 @@ def _help_all_callback(ctx: typer.Context, value: bool) -> None:
 
         click.echo(ctx.get_help())
         raise typer.Exit()
+
+
+def _make_confirm_callback(
+    config: SerixSessionConfig,
+    live_display: LiveProgressDisplay,
+) -> ConfirmCallback:
+    """
+    Create a confirmation callback for regression results.
+
+    The callback prompts the user if exploits still work, unless:
+    - -y/--yes flag is set (CI mode)
+    - No exploits still work
+
+    Args:
+        config: Session config to check is_interactive()
+        live_display: Live display to pause during prompt
+
+    Returns:
+        Callback that returns True to continue, False to abort
+    """
+
+    def callback(result: RegressionResult) -> bool:
+        # In CI mode (-y flag), auto-continue
+        if not config.is_interactive():
+            return True
+
+        # No exploits still work - continue without prompting
+        if result.still_exploited == 0:
+            return True
+
+        # Pause live display for user prompt
+        live_display.stop()
+        console.print()
+        console.print(
+            f"  [{COLOR_WARNING}]{result.still_exploited} exploits still work.[/{COLOR_WARNING}]"
+        )
+        proceed = Confirm.ask("  Continue with fresh attacks?", default=True)
+
+        # Clear the prompt lines (move up 3 lines, clear to end of screen)
+        # Line 1: blank line, Line 2: warning message, Line 3: prompt + answer
+        print("\033[3A\033[J", end="", flush=True)
+
+        if proceed:
+            # Resume live display for attack phase
+            live_display.start()
+
+        return proceed
+
+    return callback
 
 
 def test(
@@ -123,6 +196,15 @@ def test(
         bool,
         typer.Option("--exhaustive", help="Continue after first exploit"),
     ] = False,
+    # Provider configuration (Phase 13)
+    provider: Annotated[
+        str | None,
+        typer.Option(
+            "--provider",
+            "-p",
+            help="LLM provider profile: openai, anthropic, google (auto-detects if not set)",
+        ),
+    ] = None,
     # Model configuration
     attacker_model: Annotated[
         str | None,
@@ -276,10 +358,33 @@ def test(
     ] = False,
 ) -> None:
     """Run adversarial attacks against your agent and get actionable fixes."""
-    # Step 0: Check API key
-    if not _check_api_key():
-        render_api_key_missing()
-        raise typer.Exit(1)
+    # Step 0: Check API key with provider-aware logic
+    from serix_v2.cli.prompts import handle_missing_key, run_full_onboarding
+
+    if provider:
+        # Explicit provider - check for that provider's key
+        if not _check_api_key(provider):
+            if not yes:  # Interactive mode
+                if handle_missing_key(provider):
+                    console.print("Starting test...\n")
+                else:
+                    raise typer.Exit(1)
+            else:  # CI mode - show error
+                render_api_key_missing()
+                raise typer.Exit(1)
+    elif not _check_api_key():
+        # No keys at all - run full onboarding
+        if not yes:  # Interactive mode
+            selected_provider, success = run_full_onboarding()
+            if success:
+                console.print("Starting test...\n")
+                # Use the selected provider
+                provider = selected_provider
+            else:
+                raise typer.Exit(1)
+        else:  # CI mode - show error
+            render_api_key_missing()
+            raise typer.Exit(1)
 
     # Step 1: Resolve alias FIRST (Guardrail 1)
     resolved_target = _resolve_alias(target)
@@ -293,7 +398,9 @@ def test(
         try:
             parsed_headers = json.loads(headers)
         except json.JSONDecodeError:
-            console.print("[red]Error:[/red] --headers must be valid JSON")
+            console.print(
+                f"[{COLOR_ERROR}]Error:[/{COLOR_ERROR}] --headers must be valid JSON"
+            )
             raise typer.Exit(1)
 
     # Step 4: Build CLIOverrides (Guardrail 4: pass paths, not contents)
@@ -313,6 +420,8 @@ def test(
         scenarios=list(scenarios) if scenarios else None,
         depth=depth,
         exhaustive=exhaustive if exhaustive else None,
+        # Provider
+        provider=provider,
         # Models
         attacker_model=attacker_model,
         judge_model=judge_model,
@@ -345,8 +454,26 @@ def test(
     try:
         session_config = resolve_config(cli_overrides, toml_config, config_dir)
     except Exception as e:
-        console.print(f"[red]Config error:[/red] {e}")
+        console.print(f"[{COLOR_ERROR}]Config error:[/{COLOR_ERROR}] {e}")
         raise typer.Exit(1)
+
+    # Step 5b: Check for mixed provider warning
+    if session_config.provider:
+        from serix_v2.core.constants import infer_provider_from_model
+
+        for model_name, model_value in [
+            ("attacker-model", session_config.attacker_model),
+            ("judge-model", session_config.judge_model),
+            ("critic-model", session_config.critic_model),
+            ("patcher-model", session_config.patcher_model),
+            ("analyzer-model", session_config.analyzer_model),
+        ]:
+            inferred = infer_provider_from_model(model_value)
+            if inferred and inferred != session_config.provider:
+                render_mixed_provider_warning(
+                    session_config.provider, model_value, inferred
+                )
+                break  # Only show warning once
 
     # Step 6: Validate goals
     if not session_config.goals:
@@ -360,7 +487,7 @@ def test(
     try:
         target_obj = resolve_target(session_config)
     except Exception as e:
-        console.print(f"[red]Target error:[/red] {e}")
+        console.print(f"[{COLOR_ERROR}]Target error:[/{COLOR_ERROR}] {e}")
         raise typer.Exit(1)
 
     # Step 9: Create stores
@@ -370,39 +497,85 @@ def test(
     # Step 10: Render header
     render_campaign_header(
         target_path=session_config.target_path,
-        target_id=session_config.target_id or "auto",
+        target_id=target_obj.id,
         goals=session_config.goals,
         mode=session_config.mode.value,
         depth=session_config.depth,
+        provider=session_config.provider,
+        provider_auto_detected=session_config.provider_auto_detected,
     )
 
-    # Step 11: Create and run workflow
+    # Step 11: Set up live progress display
+    if "all" in session_config.scenarios:
+        personas = [p.value for p in Persona]
+    else:
+        personas = session_config.scenarios
+    progress_display = LiveProgressDisplay(personas, session_config.depth)
+
+    def on_progress(event: ProgressEvent) -> None:
+        progress_display.update(event)
+
+    # Step 12: Create and run workflow with callbacks
+    confirm_callback = _make_confirm_callback(session_config, progress_display)
     workflow = TestWorkflow(
         config=session_config,
         target=target_obj,
         llm_provider=llm_provider,
         attack_store=attack_store,
         campaign_store=campaign_store,
+        progress_callback=on_progress,
+        confirm_callback=confirm_callback,
     )
 
-    result = workflow.run()
+    # Start live display, run workflow with auth error recovery
+    while True:
+        progress_display.start()
+        try:
+            result = workflow.run()
+            progress_display.stop()
+            break  # Success - exit loop
+        except litellm.AuthenticationError:
+            progress_display.stop()
+            # Try to recover in interactive mode
+            if handle_auth_error(
+                session_config.provider, session_config.is_interactive()
+            ):
+                # User entered valid key - retry
+                # Recreate LLM provider with new key
+                llm_provider = LiteLLMProvider()
+                workflow = TestWorkflow(
+                    config=session_config,
+                    target=target_obj,
+                    llm_provider=llm_provider,
+                    attack_store=attack_store,
+                    campaign_store=campaign_store,
+                    progress_callback=on_progress,
+                    confirm_callback=confirm_callback,
+                )
+                continue  # Retry
+            else:
+                raise typer.Exit(1)
+        except openai.APIError as e:
+            # Universal handler for all other API errors
+            # Covers: RateLimitError, BadRequestError, Timeout, etc.
+            progress_display.stop()
+            render_api_error(e)
+            raise typer.Exit(1)
+        except Exception:
+            progress_display.stop()
+            raise
 
-    # Step 12: Display results (Guardrail 5: display logic in renderers)
+    # Step 13: Display results (Guardrail 5: display logic in renderers)
+    # Note: Fixes are now shown within render_vulnerabilities() for each exploit
     render_campaign_result(result, verbose=session_config.verbose)
-
-    # Step 13: Show healing patch if available
-    if result.attacks:
-        for attack in result.attacks:
-            if attack.healing and attack.healing.diff:
-                render_healing_patch(attack.healing.diff)
-                break  # Show only first patch
 
     # Step 14: Generate HTML report if enabled
     if not session_config.no_report and not session_config.dry_run:
         report_path = Path(session_config.report_path)
-        generator = HTMLReportGenerator()
-        write_html_report(generator, result, report_path)
-        console.print(f"  Report     {report_path}")
+        json_report = transform_campaign_result(result, session_config)
+        write_html_report(json_report, report_path)
+        console.print(f"  [{COLOR_DIM}]Report[/{COLOR_DIM}]     {report_path}")
+        console.print()
 
     # Step 15: GitHub output if enabled
     if session_config.github:
@@ -413,7 +586,9 @@ def test(
     if result.passed and result.resilience:
         failed_resilience = [r for r in result.resilience if not r.passed]
         if failed_resilience:
-            console.print("[yellow]⚠ Note: Some infrastructure tests failed[/yellow]")
+            console.print(
+                f"[{COLOR_WARNING}]⚠ Note: Some infrastructure tests failed[/{COLOR_WARNING}]"
+            )
 
     # Step 17: Exit code
     raise typer.Exit(0 if result.passed else 1)
