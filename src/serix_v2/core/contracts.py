@@ -80,6 +80,7 @@ class Grade(str, Enum):
 class ProgressPhase(str, Enum):
     """Phase of campaign execution for progress reporting."""
 
+    PREFLIGHT = "preflight"
     REGRESSION = "regression"
     ATTACKS = "attacks"
     FUZZ = "fuzz"
@@ -365,6 +366,9 @@ class CampaignResult(BaseModel):
     regression_still_exploited: int = 0
     regression_now_defended: int = 0
     regression_transitions: list[AttackTransition] = Field(default_factory=list)
+
+    # Aggregated patches from all successful attacks (unified diff format)
+    aggregated_patch: Optional[str] = None
 
 
 # ============================================================================

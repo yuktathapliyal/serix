@@ -28,3 +28,20 @@ class ConfigValidationError(SerixError):
         self.field = field
         self.message = message
         super().__init__(f"Config validation error for '{field}': {message}")
+
+
+class TargetUnreachableError(SerixError):
+    """Raised when the target cannot be reached during preflight check.
+
+    This error is raised early in the workflow when the target fails
+    to respond to a simple test message. This prevents wasting time
+    and resources on a target that isn't working.
+    """
+
+    def __init__(self, target_id: str, locator: str, reason: str):
+        self.target_id = target_id
+        self.locator = locator
+        self.reason = reason
+        super().__init__(
+            f"Target unreachable (id={target_id}, locator={locator}): {reason}"
+        )
