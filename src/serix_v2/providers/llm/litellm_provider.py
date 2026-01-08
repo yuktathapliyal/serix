@@ -8,10 +8,19 @@ Law 3: Implements the LLMProvider protocol from core/protocols.py
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import litellm
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_model(model: str) -> str:
@@ -87,11 +96,29 @@ class LiteLLMProvider:
         if not verbose:
             litellm.suppress_debug_info = True
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(
+            (
+                litellm.RateLimitError,
+                litellm.Timeout,
+                litellm.APIConnectionError,
+            )
+        ),
+        reraise=True,
+        before_sleep=lambda retry_state: logger.warning(
+            f"LLM call failed ({retry_state.outcome.exception()}), "
+            f"retrying in {retry_state.next_action.sleep:.1f}s "
+            f"(attempt {retry_state.attempt_number}/3)"
+        ),
+    )
     def complete(
         self,
         messages: list[dict[str, str]],
         model: str,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> str:
         """Send messages to LLM and get completion.
 
@@ -100,20 +127,28 @@ class LiteLLMProvider:
                       Each dict has "role" (system/user/assistant) and "content".
             model: Model identifier (e.g., "gpt-4o", "claude-3-opus-20240229").
             temperature: Sampling temperature (0.0-2.0).
+            json_mode: If True, enforce JSON output via response_format.
 
         Returns:
             The LLM's response content as a string.
 
         Raises:
             litellm.exceptions.*: Various LiteLLM exceptions on API errors.
+            After 3 retries on transient errors (RateLimitError, Timeout,
+            APIConnectionError), the original exception is re-raised.
         """
         # Normalize model name for litellm routing (newer models need prefixes)
         normalized_model = normalize_model(model)
+
+        kwargs: dict[str, Any] = {}
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
 
         response = litellm.completion(
             model=normalized_model,
             messages=messages,
             temperature=temperature,
+            **kwargs,
         )
 
         # Extract content from response

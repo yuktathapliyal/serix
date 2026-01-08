@@ -168,8 +168,16 @@ class LLMProvider(Protocol):
         messages: list[dict[str, str]],
         model: str,
         temperature: float = 0.7,
+        json_mode: bool = False,
     ) -> str:
-        """Send messages to LLM and get completion."""
+        """Send messages to LLM and get completion.
+
+        Args:
+            messages: OpenAI-format message list.
+            model: Model identifier.
+            temperature: Sampling temperature.
+            json_mode: If True, enforce JSON output via response_format.
+        """
         ...
 
 
