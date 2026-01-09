@@ -32,8 +32,10 @@ from serix_v2.cli.renderers.console import (
     render_api_key_missing,
     render_campaign_header,
     render_campaign_result,
+    render_invalid_scenario_error,
     render_mixed_provider_warning,
     render_no_goal_error,
+    render_target_credential_error,
     render_target_unreachable,
 )
 from serix_v2.cli.renderers.github import write_github_annotations, write_step_summary
@@ -47,7 +49,7 @@ from serix_v2.core.contracts import (
     TargetIndex,
     resolve_scenarios_to_personas,
 )
-from serix_v2.core.errors import TargetUnreachableError
+from serix_v2.core.errors import TargetCredentialError, TargetUnreachableError
 from serix_v2.providers import LiteLLMProvider
 from serix_v2.report import transform_campaign_result, write_html_report
 from serix_v2.storage import FileAttackStore, FileCampaignStore
@@ -505,7 +507,16 @@ def test(
 
     # Step 11: Set up live progress display
     # Resolve aliases to canonical names (fixes progress bar mismatch - Phase 17)
-    personas = resolve_scenarios_to_personas(session_config.scenarios)
+    try:
+        personas = resolve_scenarios_to_personas(session_config.scenarios)
+    except ValueError as e:
+        # Extract scenario name from error: "Unknown scenario: 'xyz'. Valid..."
+        import re
+
+        match = re.search(r"Unknown scenario: '([^']+)'", str(e))
+        invalid_scenario = match.group(1) if match else str(e)
+        render_invalid_scenario_error(invalid_scenario)
+        raise typer.Exit(1)
     progress_display = LiveProgressDisplay(personas, session_config.depth)
 
     def on_progress(event: ProgressEvent) -> None:
@@ -556,6 +567,17 @@ def test(
             # Covers: RateLimitError, BadRequestError, Timeout, etc.
             progress_display.stop()
             render_api_error(e)
+            raise typer.Exit(1)
+        except TargetCredentialError as e:
+            # Target failed due to missing credentials (not Serix's credentials)
+            progress_display.stop()
+            render_target_credential_error(
+                target_id=e.target_id,
+                locator=e.locator,
+                original_error=e.original_error,
+                detected_provider=e.detected_provider,
+                serix_provider=session_config.provider,
+            )
             raise typer.Exit(1)
         except TargetUnreachableError as e:
             # Preflight check failed - target couldn't respond
