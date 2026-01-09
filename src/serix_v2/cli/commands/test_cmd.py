@@ -29,7 +29,6 @@ from serix_v2.cli.renderers.console import (
     LiveProgressDisplay,
     handle_auth_error,
     render_api_error,
-    render_api_key_missing,
     render_campaign_header,
     render_campaign_result,
     render_invalid_scenario_error,
@@ -358,33 +357,10 @@ def test(
     ] = False,
 ) -> None:
     """Run adversarial attacks against your agent and get actionable fixes."""
-    # Step 0: Check API key with provider-aware logic
-    from serix_v2.cli.prompts import handle_missing_key, run_full_onboarding
+    import sys
 
-    if provider:
-        # Explicit provider - check for that provider's key
-        if not _check_api_key(provider):
-            if not yes:  # Interactive mode
-                if handle_missing_key(provider):
-                    console.print("Starting test...\n")
-                else:
-                    raise typer.Exit(1)
-            else:  # CI mode - show error
-                render_api_key_missing()
-                raise typer.Exit(1)
-    elif not _check_api_key():
-        # No keys at all - run full onboarding
-        if not yes:  # Interactive mode
-            selected_provider, success = run_full_onboarding()
-            if success:
-                console.print("Starting test...\n")
-                # Use the selected provider
-                provider = selected_provider
-            else:
-                raise typer.Exit(1)
-        else:  # CI mode - show error
-            render_api_key_missing()
-            raise typer.Exit(1)
+    # Capture original command for "Then re-run" message in credential wizard
+    original_command = " ".join(sys.argv)
 
     # Step 1: Resolve alias FIRST (Guardrail 1)
     resolved_target = _resolve_alias(target)
@@ -456,6 +432,131 @@ def test(
     except Exception as e:
         console.print(f"[{COLOR_ERROR}]Config error:[/{COLOR_ERROR}] {e}")
         raise typer.Exit(1)
+
+    # Step 5a: Unified Credential Wizard (Phase 19)
+    # Analyze all required providers and ensure keys are present and valid
+    from serix_v2.cli.prompts import (
+        render_ci_invalid_summary,
+        render_ci_missing_summary,
+        run_credential_wizard,
+    )
+    from serix_v2.services.credential_preflight import (
+        analyze_requirements,
+        run_dry_preflight,
+        validate_all_keys,
+    )
+    from serix_v2.services.key_validator import KeyValidationResult
+
+    # Determine target_provider (from config or dry preflight)
+    target_provider = session_config.target_provider
+
+    if not target_provider and not yes:
+        # No target_provider in config - try dry preflight to detect it
+        try:
+            target_obj_for_preflight = resolve_target(session_config)
+            detected, _error = run_dry_preflight(
+                target_obj_for_preflight.invoke,
+                target_obj_for_preflight.id,
+                session_config.target_path,
+            )
+            if detected:
+                target_provider = detected
+        except Exception:
+            # Target resolution failed - we'll handle this later
+            pass
+
+    # Build model overrides dict for analysis
+    model_overrides = {
+        "attacker": session_config.attacker_model,
+        "judge": session_config.judge_model,
+        "critic": session_config.critic_model,
+        "patcher": session_config.patcher_model,
+        "analyzer": session_config.analyzer_model,
+    }
+
+    # Analyze ALL requirements (check EXISTENCE)
+    analysis = analyze_requirements(
+        serix_provider=session_config.provider,
+        model_overrides=model_overrides,
+        target_provider=target_provider,
+    )
+
+    # Handle MISSING credentials (env vars not present)
+    if not analysis.all_present:
+        if yes:  # CI mode - show summary and exit
+            render_ci_missing_summary(analysis)
+            raise typer.Exit(1)
+        else:  # Interactive mode - run wizard
+            success = run_credential_wizard(analysis, original_command)
+            if not success:
+                raise typer.Exit(1)
+
+    # VALIDATE all keys (call APIs to verify they work)
+    # This runs even if all keys were present - they might be invalid
+    validation_results = validate_all_keys(analysis.requirements)
+    invalid_reqs = [
+        req
+        for req in analysis.requirements
+        if req.is_present
+        and not validation_results.get(
+            req.provider, KeyValidationResult(valid=False, provider=req.provider)
+        ).valid
+    ]
+
+    # Handle INVALID keys (validation failed)
+    if invalid_reqs:
+        if yes:  # CI mode - show invalid and exit
+            render_ci_invalid_summary(invalid_reqs, validation_results)
+            raise typer.Exit(1)
+        else:  # Interactive mode - wizard handles re-prompting
+            # The wizard was already run above if keys were missing
+            # For pre-existing but invalid keys, we need to prompt
+            from serix_v2.cli.prompts.credential_wizard import (
+                MAX_VALIDATION_RETRIES,
+                prompt_choice,
+                prompt_sequential_keys,
+                render_all_valid,
+                render_invalid_summary,
+                render_manual_setup_full,
+                render_max_retries_error,
+            )
+            from serix_v2.services.credential_preflight import (
+                update_requirement_presence,
+            )
+
+            retries = 0
+            while invalid_reqs and retries < MAX_VALIDATION_RETRIES:
+                render_invalid_summary(invalid_reqs, validation_results)
+                choice = prompt_choice()
+
+                if choice == "manual":
+                    render_manual_setup_full(invalid_reqs, original_command)
+                    raise typer.Exit(1)
+
+                # Re-enter invalid keys
+                entered = prompt_sequential_keys(invalid_reqs, context="invalid")
+                if not all(entered.values()):
+                    raise typer.Exit(1)
+
+                # Re-validate
+                update_requirement_presence(analysis.requirements)
+                validation_results = validate_all_keys(analysis.requirements)
+                invalid_reqs = [
+                    req
+                    for req in analysis.requirements
+                    if req.is_present
+                    and not validation_results.get(
+                        req.provider,
+                        KeyValidationResult(valid=False, provider=req.provider),
+                    ).valid
+                ]
+                retries += 1
+
+            if invalid_reqs:
+                render_max_retries_error()
+                raise typer.Exit(1)
+
+            render_all_valid()
 
     # Step 5b: Check for mixed provider warning
     if session_config.provider:
