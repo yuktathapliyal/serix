@@ -42,10 +42,10 @@ from serix_v2.config import CLIOverrides, load_toml_config, resolve_config
 from serix_v2.core.config import SerixSessionConfig
 from serix_v2.core.contracts import (
     ConfirmCallback,
-    Persona,
     ProgressEvent,
     RegressionResult,
     TargetIndex,
+    resolve_scenarios_to_personas,
 )
 from serix_v2.core.errors import TargetUnreachableError
 from serix_v2.providers import LiteLLMProvider
@@ -504,10 +504,8 @@ def test(
     )
 
     # Step 11: Set up live progress display
-    if "all" in session_config.scenarios:
-        personas = [p.value for p in Persona]
-    else:
-        personas = session_config.scenarios
+    # Resolve aliases to canonical names (fixes progress bar mismatch - Phase 17)
+    personas = resolve_scenarios_to_personas(session_config.scenarios)
     progress_display = LiveProgressDisplay(personas, session_config.depth)
 
     def on_progress(event: ProgressEvent) -> None:

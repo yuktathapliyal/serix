@@ -49,6 +49,56 @@ class Persona(str, Enum):
     MANIPULATOR = "manipulator"
 
 
+# ============================================================================
+# SCENARIO ALIAS MAPPING
+# ============================================================================
+
+# Mapping from CLI scenario names to Persona enum values
+# Supports both short aliases (jailbreak) and canonical names (jailbreaker)
+SCENARIO_TO_PERSONA: dict[str, Persona] = {
+    "jailbreak": Persona.JAILBREAKER,
+    "jailbreaker": Persona.JAILBREAKER,
+    "pii_leak": Persona.EXTRACTOR,
+    "extraction": Persona.EXTRACTOR,
+    "extractor": Persona.EXTRACTOR,
+    # "injection" alias removed - ambiguous mapping (Phase 2 Fix 3)
+    "confusion": Persona.CONFUSER,
+    "confuser": Persona.CONFUSER,
+    "manipulation": Persona.MANIPULATOR,
+    "manipulator": Persona.MANIPULATOR,
+}
+
+
+def resolve_scenarios_to_personas(scenarios: list[str]) -> list[str]:
+    """
+    Resolve scenario aliases to canonical persona names for display.
+
+    This ensures the progress display uses the same names as event emission.
+
+    Args:
+        scenarios: List of scenario names (may include aliases like "jailbreak")
+
+    Returns:
+        List of canonical persona names (e.g., ["jailbreaker"])
+
+    Raises:
+        ValueError: If an unknown scenario name is provided
+    """
+    if "all" in scenarios:
+        return [p.value for p in Persona]
+
+    resolved: list[str] = []
+    for scenario in scenarios:
+        if scenario in SCENARIO_TO_PERSONA:
+            resolved.append(SCENARIO_TO_PERSONA[scenario].value)
+        else:
+            valid = list(SCENARIO_TO_PERSONA.keys())
+            raise ValueError(
+                f"Unknown scenario: {scenario!r}. Valid scenarios: {valid}"
+            )
+    return resolved
+
+
 class TargetType(str, Enum):
     """Type of target being tested."""
 

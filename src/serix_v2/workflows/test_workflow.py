@@ -16,6 +16,7 @@ from pathlib import Path
 from serix_v2.core.config import SerixSessionConfig
 from serix_v2.core.constants import APP_DIR
 from serix_v2.core.contracts import (
+    SCENARIO_TO_PERSONA,
     AttackMode,
     AttackResult,
     AttackStatus,
@@ -47,22 +48,6 @@ from serix_v2.providers.judge import LLMJudge
 from serix_v2.providers.patcher import LLMPatcher
 from serix_v2.services.fuzz import FuzzService
 from serix_v2.services.regression import RegressionService
-
-# Mapping from CLI scenario names to Persona enum values
-# Supports both short names (jailbreak) and full names (jailbreaker)
-SCENARIO_TO_PERSONA: dict[str, Persona] = {
-    "jailbreak": Persona.JAILBREAKER,
-    "jailbreaker": Persona.JAILBREAKER,
-    "pii_leak": Persona.EXTRACTOR,
-    "extraction": Persona.EXTRACTOR,
-    "extractor": Persona.EXTRACTOR,
-    # "injection" alias removed - ambiguous mapping (Phase 2 Fix 3)
-    # Users should use explicit scenario names: "confusion" or "confuser"
-    "confusion": Persona.CONFUSER,
-    "confuser": Persona.CONFUSER,
-    "manipulation": Persona.MANIPULATOR,
-    "manipulator": Persona.MANIPULATOR,
-}
 
 
 class TestWorkflow:
