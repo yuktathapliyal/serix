@@ -552,6 +552,52 @@ class InitResult(BaseModel):
 
 
 # ============================================================================
+# CREDENTIAL WIZARD MODELS (Phase 19 - Unified Credential Wizard)
+# ============================================================================
+
+
+class ProviderRequirement(BaseModel):
+    """
+    Tracks a single provider requirement for credential validation.
+
+    Used by the unified credential wizard to analyze which API keys are needed
+    and their status (present/missing, valid/invalid).
+    """
+
+    provider: str  # "openai", "anthropic", "google"
+    env_var: str  # "OPENAI_API_KEY", etc.
+    roles: list[str]  # ["attacker", "critic"] or ["target"]
+    is_target: bool = False  # True if for target, not Serix
+    is_present: bool = False  # True if key found in environment
+
+
+class CredentialAnalysisResult(BaseModel):
+    """
+    Result of upfront credential analysis.
+
+    Contains all required providers, their status, and information about
+    how the target provider was determined (detection vs config).
+    """
+
+    requirements: list[ProviderRequirement]
+    missing_count: int
+    all_present: bool
+    target_provider: Optional[str] = None  # Provider detected for target
+    target_provider_source: Optional[str] = None  # "dry_preflight", "config", "skipped"
+    dry_preflight_error: Optional[str] = None  # Error message if dry preflight failed
+
+    @property
+    def missing_requirements(self) -> list[ProviderRequirement]:
+        """Return only the missing requirements."""
+        return [r for r in self.requirements if not r.is_present]
+
+    @property
+    def present_requirements(self) -> list[ProviderRequirement]:
+        """Return only the present requirements."""
+        return [r for r in self.requirements if r.is_present]
+
+
+# ============================================================================
 # PROGRESS EVENTS (For live CLI progress display)
 # ============================================================================
 
