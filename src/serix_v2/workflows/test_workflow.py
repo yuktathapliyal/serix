@@ -37,7 +37,7 @@ from serix_v2.core.contracts import (
     TargetMetadata,
     TargetType,
 )
-from serix_v2.core.errors import TargetUnreachableError
+from serix_v2.core.errors import TargetCredentialError, TargetUnreachableError
 from serix_v2.core.id_gen import generate_attack_id, generate_run_id, generate_target_id
 from serix_v2.core.protocols import AttackStore, CampaignStore, LLMProvider, Target
 from serix_v2.engine.adversary import AdversaryEngine
@@ -132,7 +132,26 @@ class TestWorkflow:
                 )
         except TargetUnreachableError:
             raise
+        except TargetCredentialError:
+            raise
         except Exception as e:
+            error_str = str(e).lower()
+            # Check if this is a credential/auth error
+            credential_indicators = [
+                "api_key",
+                "api key",
+                "authentication",
+                "unauthorized",
+                "invalid_api_key",
+                "missing_api_key",
+            ]
+            if any(indicator in error_str for indicator in credential_indicators):
+                raise TargetCredentialError(
+                    target_id=target_id,
+                    locator=self._config.target_path,
+                    original_error=str(e),
+                ) from e
+            # Otherwise, it's a general target error
             raise TargetUnreachableError(
                 target_id=target_id,
                 locator=self._config.target_path,
