@@ -1109,6 +1109,65 @@ def render_target_unreachable(target_id: str, locator: str, reason: str) -> None
     console.print()
 
 
+def render_target_credential_error(
+    target_id: str,
+    locator: str,
+    original_error: str,
+    detected_provider: str | None,
+    serix_provider: str | None,
+) -> None:
+    """Render target credential error with clear distinction from Serix credentials.
+
+    This helps users understand that their TARGET needs API credentials,
+    which is separate from the credentials Serix uses for red-teaming.
+
+    Law 9 Compliance: Complex display logic belongs here, not in commands.
+
+    Args:
+        target_id: The target's unique identifier.
+        locator: The target path (e.g., "agent.py:my_agent").
+        original_error: The original error message from the target.
+        detected_provider: Provider detected from error (openai/anthropic/google).
+        serix_provider: Provider Serix is using for attacker/judge.
+    """
+    from serix_v2.core.constants import PROVIDER_ENV_VARS
+
+    console.print()
+    console.print(f"  [{COLOR_ERROR}]✗[/{COLOR_ERROR}] Target Credential Error")
+    console.print()
+    console.print(f"  [bold]Target:[/bold]  {locator}")
+    console.print("  [bold]Reason:[/bold]  Target requires API credentials")
+    console.print()
+
+    # Show which key the target needs
+    if detected_provider:
+        env_var = PROVIDER_ENV_VARS.get(detected_provider, "OPENAI_API_KEY")
+        console.print(f"  Your target uses the {detected_provider.title()} API.")
+        console.print("  Set the environment variable:")
+        console.print()
+        console.print(f"    export {env_var}=<your-key>")
+    else:
+        console.print("  Your target requires API credentials.")
+        console.print("  Check the error message for details:")
+        console.print()
+        # Truncate long error messages
+        error_preview = (
+            original_error[:100] + "..."
+            if len(original_error) > 100
+            else original_error
+        )
+        console.print(f"    {error_preview}")
+
+    console.print()
+    # Clarify that Serix uses a different key (only if different provider)
+    if serix_provider and detected_provider and serix_provider != detected_provider:
+        console.print(
+            f"  [{COLOR_DIM}](Serix uses {serix_provider} for red-teaming - "
+            f"this is separate)[/{COLOR_DIM}]"
+        )
+        console.print()
+
+
 def render_file_not_found(path: str, cwd: str) -> None:
     """Render file not found error."""
     console.print()
@@ -1147,6 +1206,38 @@ def render_invalid_target_format(received: str) -> None:
     console.print('    serix test agent.py:my_agent --goal "..."')
     console.print('    serix test src/bot.py:ChatBot --goal "..."')
     console.print('    serix test http://localhost:8000/chat --goal "..."')
+    console.print()
+
+
+def render_invalid_scenario_error(invalid_scenario: str) -> None:
+    """Render friendly error for invalid scenario names.
+
+    Law 9 Compliance: Complex multi-line error display centralized here.
+
+    Args:
+        invalid_scenario: The invalid scenario name the user provided.
+    """
+    console.print()
+    console.print(f"  [{COLOR_ERROR}]✗[/{COLOR_ERROR}] Invalid Scenario")
+    console.print()
+    console.print(f"  Unknown scenario: {invalid_scenario!r}")
+    console.print()
+    console.print(f"  [{COLOR_DIM}]Valid scenarios:[/{COLOR_DIM}]")
+    console.print(
+        f"    [{COLOR_COMMAND}]jailbreak[/{COLOR_COMMAND}]       Bypass safety guardrails"
+    )
+    console.print(
+        f"    [{COLOR_COMMAND}]pii_leak[/{COLOR_COMMAND}]        Extract sensitive data"
+    )
+    console.print(
+        f"    [{COLOR_COMMAND}]confusion[/{COLOR_COMMAND}]       Logical traps and contradictions"
+    )
+    console.print(
+        f"    [{COLOR_COMMAND}]manipulation[/{COLOR_COMMAND}]    Social engineering attacks"
+    )
+    console.print()
+    console.print(f"  [{COLOR_DIM}]Example:[/{COLOR_DIM}]")
+    console.print("    serix test target.py:func -s jailbreak --depth 3")
     console.print()
 
 
