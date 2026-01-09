@@ -45,3 +45,33 @@ class TargetUnreachableError(SerixError):
         super().__init__(
             f"Target unreachable (id={target_id}, locator={locator}): {reason}"
         )
+
+
+class TargetCredentialError(SerixError):
+    """Raised when target fails due to missing or invalid API credentials.
+
+    This error helps users understand that the TARGET (not Serix) needs
+    API credentials. This is especially confusing when the user is using
+    a different provider for Serix vs their target.
+    """
+
+    def __init__(self, target_id: str, locator: str, original_error: str):
+        self.target_id = target_id
+        self.locator = locator
+        self.original_error = original_error
+        self.detected_provider = self._detect_provider(original_error)
+        super().__init__(
+            f"Target requires API credentials (id={target_id}): {original_error}"
+        )
+
+    @staticmethod
+    def _detect_provider(error_msg: str) -> str | None:
+        """Detect which provider the target likely needs."""
+        error_lower = error_msg.lower()
+        if "openai" in error_lower or "gpt" in error_lower:
+            return "openai"
+        elif "anthropic" in error_lower or "claude" in error_lower:
+            return "anthropic"
+        elif "google" in error_lower or "gemini" in error_lower:
+            return "google"
+        return None
