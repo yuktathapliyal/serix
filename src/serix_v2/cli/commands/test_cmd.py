@@ -34,6 +34,7 @@ from serix_v2.cli.renderers.console import (
     render_campaign_result,
     render_mixed_provider_warning,
     render_no_goal_error,
+    render_target_unreachable,
 )
 from serix_v2.cli.renderers.github import write_github_annotations, write_step_summary
 from serix_v2.cli.theme import COLOR_DIM, COLOR_ERROR, COLOR_WARNING
@@ -46,6 +47,7 @@ from serix_v2.core.contracts import (
     RegressionResult,
     TargetIndex,
 )
+from serix_v2.core.errors import TargetUnreachableError
 from serix_v2.providers import LiteLLMProvider
 from serix_v2.report import transform_campaign_result, write_html_report
 from serix_v2.storage import FileAttackStore, FileCampaignStore
@@ -556,6 +558,11 @@ def test(
             # Covers: RateLimitError, BadRequestError, Timeout, etc.
             progress_display.stop()
             render_api_error(e)
+            raise typer.Exit(1)
+        except TargetUnreachableError as e:
+            # Preflight check failed - target couldn't respond
+            progress_display.stop()
+            render_target_unreachable(e.target_id, e.locator, e.reason)
             raise typer.Exit(1)
         except Exception:
             progress_display.stop()

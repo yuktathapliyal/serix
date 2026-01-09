@@ -48,6 +48,22 @@ from serix_v2.providers.patcher import LLMPatcher
 from serix_v2.services.fuzz import FuzzService
 from serix_v2.services.regression import RegressionService
 
+# Mapping from CLI scenario names to Persona enum values
+# Supports both short names (jailbreak) and full names (jailbreaker)
+SCENARIO_TO_PERSONA: dict[str, Persona] = {
+    "jailbreak": Persona.JAILBREAKER,
+    "jailbreaker": Persona.JAILBREAKER,
+    "pii_leak": Persona.EXTRACTOR,
+    "extraction": Persona.EXTRACTOR,
+    "extractor": Persona.EXTRACTOR,
+    # "injection" alias removed - ambiguous mapping (Phase 2 Fix 3)
+    # Users should use explicit scenario names: "confusion" or "confuser"
+    "confusion": Persona.CONFUSER,
+    "confuser": Persona.CONFUSER,
+    "manipulation": Persona.MANIPULATOR,
+    "manipulator": Persona.MANIPULATOR,
+}
+
 
 class TestWorkflow:
     """
@@ -438,12 +454,33 @@ class TestWorkflow:
         """
         Map config.scenarios to Persona enums.
 
+        Uses SCENARIO_TO_PERSONA mapping to convert CLI scenario names
+        (e.g., 'jailbreak') to Persona enum values (e.g., Persona.JAILBREAKER).
+
         Returns:
             List of Persona enums to test.
+
+        Raises:
+            ValueError: If an unknown scenario name is provided.
         """
         if "all" in self._config.scenarios:
             return list(Persona)
-        return [Persona(s) for s in self._config.scenarios]
+
+        personas: list[Persona] = []
+        for scenario in self._config.scenarios:
+            if scenario in SCENARIO_TO_PERSONA:
+                personas.append(SCENARIO_TO_PERSONA[scenario])
+            else:
+                # Fallback: try direct enum conversion
+                try:
+                    personas.append(Persona(scenario))
+                except ValueError:
+                    valid_scenarios = list(SCENARIO_TO_PERSONA.keys())
+                    raise ValueError(
+                        f"Unknown scenario: {scenario!r}. "
+                        f"Valid scenarios: {valid_scenarios}"
+                    )
+        return personas
 
     def _calculate_score(
         self, attacks: list[AttackResult], regression_still_exploited: int = 0
