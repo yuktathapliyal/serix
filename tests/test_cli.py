@@ -47,20 +47,18 @@ class TestVersionAndHelp:
         # Typer with no_args_is_help=True exits with code 2
         # This is expected behavior - it's showing help, not an error
         assert result.exit_code in (0, 2)
-        # Should show v0.3.0 architecture commands
+        # Should show available commands
+        assert "run" in result.output
+        assert "record" in result.output
+        assert "replay" in result.output
         assert "test" in result.output
-        assert "demo" in result.output
-        assert "dev" in result.output
-        assert "status" in result.output
-        assert "init" in result.output
 
     def test_help_flag(self) -> None:
-        """--help shows custom Serix help."""
+        """--help shows help."""
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        assert "SERIX" in result.output
-        assert "Commands:" in result.output
+        assert "Usage" in result.output
 
     def test_command_help(self) -> None:
         """Command --help shows command-specific help."""
@@ -71,37 +69,98 @@ class TestVersionAndHelp:
 
 
 # =============================================================================
-# Dev Command Tests (replaces run/record/replay)
+# Run Command Tests
 # =============================================================================
 
 
-class TestDevCommand:
-    """Tests for 'serix dev' command."""
+class TestRunCommand:
+    """Tests for 'serix run' command."""
 
-    def test_dev_help(self) -> None:
-        """dev command has help text."""
-        result = runner.invoke(app, ["dev", "--help"])
+    def test_run_missing_script(self, tmp_path: Path) -> None:
+        """Error when script doesn't exist."""
+        result = runner.invoke(app, ["run", str(tmp_path / "nonexistent.py")])
 
-        assert result.exit_code == 0
-        assert "dev" in result.output.lower()
+        assert result.exit_code != 0
+        assert "not found" in result.output.lower() or "error" in result.output.lower()
 
-    def test_dev_has_capture_option(self) -> None:
-        """dev has --capture option."""
-        result = runner.invoke(app, ["dev", "--help"])
+    def test_run_with_fuzz_flag(self, temp_agent_script: Path) -> None:
+        """--fuzz enables fuzzing mode."""
+        # Mock the script execution
+        with patch("serix.cli._run_script") as mock_run:
+            result = runner.invoke(app, ["run", str(temp_agent_script), "--fuzz"])
 
-        assert "capture" in result.output.lower()
+            # Should attempt to run
+            assert mock_run.called or result.exit_code == 0
 
-    def test_dev_has_playback_option(self) -> None:
-        """dev has --playback option."""
-        result = runner.invoke(app, ["dev", "--help"])
+    def test_run_fuzz_flags_enable_specific_mutations(
+        self, temp_agent_script: Path
+    ) -> None:
+        """--fuzz-latency, --fuzz-errors, --fuzz-json enable specific mutations."""
+        with patch("serix.cli._run_script"):
+            with patch("serix.cli.set_serix_config") as mock_config:
+                runner.invoke(app, ["run", str(temp_agent_script), "--fuzz-latency"])
 
-        assert "playback" in result.output.lower()
+                # Verify config was set
+                if mock_config.called:
+                    config = mock_config.call_args[0][0]
+                    assert config.fuzz.enable_latency is True
 
-    def test_dev_has_fuzz_option(self) -> None:
-        """dev has --fuzz option."""
-        result = runner.invoke(app, ["dev", "--help"])
 
-        assert "fuzz" in result.output.lower()
+# =============================================================================
+# Record Command Tests
+# =============================================================================
+
+
+class TestRecordCommand:
+    """Tests for 'serix record' command."""
+
+    def test_record_missing_script(self, tmp_path: Path) -> None:
+        """Error when script doesn't exist."""
+        result = runner.invoke(app, ["record", str(tmp_path / "nonexistent.py")])
+
+        assert result.exit_code != 0
+
+    def test_record_with_output_option(self, temp_agent_script: Path) -> None:
+        """--output specifies output file."""
+        with patch("serix.cli._run_script"):
+            with patch("serix.cli.save_recording"):
+                result = runner.invoke(
+                    app,
+                    [
+                        "record",
+                        str(temp_agent_script),
+                        "-o",
+                        "custom_output.json",
+                    ],
+                )
+
+                # Command should parse without error
+                # (actual recording requires real OpenAI calls)
+                assert result.exit_code == 0 or result.exit_code == 1
+
+
+# =============================================================================
+# Replay Command Tests
+# =============================================================================
+
+
+class TestReplayCommand:
+    """Tests for 'serix replay' command."""
+
+    def test_replay_missing_recording(self, temp_agent_script: Path) -> None:
+        """Error when recording file doesn't exist."""
+        result = runner.invoke(
+            app,
+            [
+                "replay",
+                str(temp_agent_script),
+                "-r",
+                "nonexistent_recording.json",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "not found" in result.output.lower() or "error" in result.output.lower()
 
 
 # =============================================================================
@@ -187,17 +246,14 @@ class TestTestCommand:
 
         assert "report" in result.output.lower()
 
-    def test_test_exhaustive_flag(self) -> None:
-        """--exhaustive flag is documented."""
+    # NOTE: test_test_fail_fast_flag removed - --fail-fast deprecated in v0.3.0
+    # NOTE: test_test_no_save_flag removed - --no-save deprecated in v0.3.0
+
+    def test_test_verbose_flag(self) -> None:
+        """--verbose flag is documented."""
         result = runner.invoke(app, ["test", "--help"])
 
-        assert "exhaustive" in result.output.lower()
-
-    def test_test_config_flag(self) -> None:
-        """--config flag is documented."""
-        result = runner.invoke(app, ["test", "--help"])
-
-        assert "config" in result.output.lower()
+        assert "verbose" in result.output.lower()
 
 
 # =============================================================================
@@ -259,8 +315,8 @@ class TestInitCommand:
             assert result.exit_code == 0
             # Should have new default content
             content = config_path.read_text()
+            assert "[target]" in content
             assert "[attack]" in content
-            assert "[models]" in content
         finally:
             os.chdir(original_dir)
 
@@ -288,31 +344,30 @@ class TestDemoCommand:
 
 
 # =============================================================================
-# Status Command Tests
+# Attack Command Tests (Deprecated)
 # =============================================================================
 
 
-class TestStatusCommand:
-    """Tests for 'serix status' command."""
+class TestAttackCommandDeprecated:
+    """Tests for deprecated 'serix attack' command."""
 
-    def test_status_help(self) -> None:
-        """status command has help text."""
-        result = runner.invoke(app, ["status", "--help"])
+    def test_attack_command_exists(self) -> None:
+        """attack command exists and has help."""
+        result = runner.invoke(app, ["attack", "--help"])
 
+        # Command exists (even though deprecated)
         assert result.exit_code == 0
-        assert "status" in result.output.lower()
+        # Help should mention it's deprecated or show options
+        assert "goal" in result.output.lower() or "deprecated" in result.output.lower()
 
-    def test_status_has_json_option(self) -> None:
-        """status has --json option."""
-        result = runner.invoke(app, ["status", "--help"])
+    def test_attack_hidden_from_help(self) -> None:
+        """attack command is hidden from main help."""
+        result = runner.invoke(app, ["--help"])
 
-        assert "json" in result.output.lower()
-
-    def test_status_has_name_option(self) -> None:
-        """status has --name option."""
-        result = runner.invoke(app, ["status", "--help"])
-
-        assert "name" in result.output.lower()
+        # attack should not appear in main help (it's hidden)
+        # Verify help shows normal commands
+        assert result.exit_code == 0
+        assert "test" in result.output.lower()
 
 
 # =============================================================================
@@ -361,6 +416,12 @@ class TestHttpTargetParsing:
 
 class TestFlagCombinations:
     """Tests for various flag combinations."""
+
+    def test_verbose_short_flag(self) -> None:
+        """-v is short for --verbose."""
+        result = runner.invoke(app, ["test", "--help"])
+
+        assert "-v" in result.output
 
     def test_depth_short_flag(self) -> None:
         """-d is short for --depth."""

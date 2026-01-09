@@ -1,10 +1,5 @@
-"""Workflow orchestration layer."""
+"""Workflow orchestration for Serix."""
 
-from .dev_workflow import DevWorkflow, DevWorkflowResult
-from .test_workflow import TestWorkflow
+from serix.workflows.test_workflow import TestResult, TestWorkflow
 
-__all__ = [
-    "DevWorkflow",
-    "DevWorkflowResult",
-    "TestWorkflow",
-]
+__all__ = ["TestResult", "TestWorkflow"]
