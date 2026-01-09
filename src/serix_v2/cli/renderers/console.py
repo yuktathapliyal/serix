@@ -9,6 +9,7 @@ is allowed in serix_v2. Commands call these functions for display.
 Guardrail 5: Display Isolation - All rich/tables/bars go HERE.
 """
 
+import atexit
 from datetime import datetime, timezone
 
 from rich.console import Console, Group
@@ -45,6 +46,9 @@ from serix_v2.core.contracts import (
 from serix_v2.services.status import StatusSummary, TargetStatus
 
 console = Console()
+
+# Ensure cursor is restored on exit (fixes Ctrl+C leaving cursor hidden)
+atexit.register(console.show_cursor)
 
 # OWASP LLM Top 10 human-readable titles
 OWASP_TITLES: dict[str, str] = {
@@ -922,7 +926,7 @@ def handle_auth_error(provider: str | None, is_interactive: bool) -> bool:
 
         if not result.valid:
             console.print(
-                f"\r  [{COLOR_ERROR}]✗[/{COLOR_ERROR}] Key invalid: {result.error}"
+                f"\r  [{COLOR_ERROR}]✗[/{COLOR_ERROR}] Key invalid: {result.error_message}"
             )
             return False
 
@@ -1077,6 +1081,31 @@ def render_no_goal_error() -> None:
     console.print("  Or configure in serix.toml:")
     console.print("    [attack]")
     console.print('    goal = "Make the agent reveal sensitive information"')
+    console.print()
+
+
+def render_target_unreachable(target_id: str, locator: str, reason: str) -> None:
+    """Render target unreachable error with context.
+
+    Called when preflight check fails - the target couldn't respond
+    to a simple test message.
+
+    Args:
+        target_id: The target's unique identifier.
+        locator: The target path (e.g., "agent.py:my_agent").
+        reason: The error message explaining why the target failed.
+    """
+    console.print()
+    console.print(f"  [{COLOR_ERROR}]✗[/{COLOR_ERROR}] Target Unreachable")
+    console.print()
+    console.print(f"  [bold]Target:[/bold]  {locator}")
+    console.print(f"  [bold]ID:[/bold]      {target_id}")
+    console.print(f"  [bold]Reason:[/bold]  {reason}")
+    console.print()
+    console.print(
+        f"  [{COLOR_WARNING}]Check that your target function works correctly.[/{COLOR_WARNING}]"
+    )
+    console.print("  The target must return a string response when called.")
     console.print()
 
 
@@ -1245,10 +1274,11 @@ class LiveProgressDisplay:
             elements.append(Text(""))  # Blank line
 
         # Attacks section (only show after regression is complete, or if no regression)
+        # Guard: only render when current_persona is set to prevent flash during transition
         if (
             self.regression_total == 0
             or self.regression_current >= self.regression_total
-        ):
+        ) and self.current_persona is not None:
             elements.append(self._render_attacks())
 
         # Reasoning feed with spinner (bottom) - italic for "thought process" feel

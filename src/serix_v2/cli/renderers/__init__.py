@@ -24,6 +24,7 @@ from serix_v2.cli.renderers.console import (
     render_no_targets_found,
     render_status_table,
     render_target_not_found,
+    render_target_unreachable,
 )
 from serix_v2.cli.renderers.github import write_github_annotations, write_step_summary
 
@@ -41,6 +42,7 @@ __all__ = [
     "render_no_targets_found",
     "render_status_table",
     "render_target_not_found",
+    "render_target_unreachable",
     # GitHub renderers
     "write_github_annotations",
     "write_step_summary",
