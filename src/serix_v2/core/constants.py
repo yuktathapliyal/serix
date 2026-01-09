@@ -161,26 +161,39 @@ def infer_provider_from_model(model: str) -> str | None:
     """
     Infer provider from a model ID string.
 
-    Used for mixed-provider detection warnings.
+    Used for mixed-provider detection warnings and credential analysis.
 
     Args:
-        model: Model ID (e.g., "gpt-4o", "claude-sonnet-4-20250514")
+        model: Model ID (e.g., "gpt-4o", "claude-sonnet-4-20250514", "o1-mini")
 
     Returns:
         Provider name if detected, None if unknown.
     """
     model_lower = model.lower()
 
-    # OpenAI patterns
-    if model_lower.startswith(("gpt-", "o1-", "text-", "davinci", "curie", "babbage")):
+    # OpenAI patterns (expanded for o1/o3/o4 reasoning models)
+    # Note: "o1" without hyphen catches o1-mini, o1-preview, and future variants
+    openai_prefixes = (
+        "gpt-",
+        "o1",  # o1-mini, o1-preview, o1-pro
+        "o3",  # Future reasoning models
+        "o4",  # Future reasoning models
+        "chatgpt-",
+        "text-",
+        "davinci",
+        "curie",
+        "babbage",
+    )
+    if model_lower.startswith(openai_prefixes):
         return "openai"
 
     # Anthropic patterns
-    if model_lower.startswith(("claude-",)):
+    if model_lower.startswith("claude"):
         return "anthropic"
 
     # Google patterns
-    if model_lower.startswith(("gemini-", "palm-", "bison", "gecko")):
+    google_prefixes = ("gemini", "gemma", "palm-", "bison", "gecko")
+    if model_lower.startswith(google_prefixes):
         return "google"
 
     return None
