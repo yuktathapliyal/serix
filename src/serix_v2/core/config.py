@@ -59,6 +59,11 @@ class SerixSessionConfig(BaseModel):
     provider_auto_detected: bool = False  # True if provider was auto-detected
 
     # ========================================================================
+    # TARGET PROVIDER (Phase 19 - Unified Credential Wizard)
+    # ========================================================================
+    target_provider: Optional[str] = None  # From config or dry preflight detection
+
+    # ========================================================================
     # MODELS (Spec 1.8)
     # ========================================================================
     attacker_model: str = constants.DEFAULT_ATTACKER_MODEL  # --attacker-model

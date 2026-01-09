@@ -21,6 +21,9 @@ class TomlTargetConfig(BaseModel):
     output_field: str | None = None
     headers: dict[str, str] | None = None
     headers_file: str | None = None
+    provider: str | None = (
+        None  # Phase 19: Target's provider (skips dry preflight detection)
+    )
 
 
 class TomlAttackConfig(BaseModel):

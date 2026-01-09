@@ -48,6 +48,9 @@ class CLIOverrides(BaseModel):
     # Provider (Phase 13)
     provider: str | None = None
 
+    # Target Provider (Phase 19)
+    target_provider: str | None = None
+
     # Models
     attacker_model: str | None = None
     judge_model: str | None = None
@@ -447,6 +450,15 @@ def resolve_config(
         and effective_provider is not None
     )
 
+    # ========================================================================
+    # TARGET PROVIDER (Phase 19 - Unified Credential Wizard)
+    # ========================================================================
+    # Priority: CLI > TOML > None (will be detected during dry preflight)
+    target_provider = _first_non_none(
+        cli.target_provider,
+        toml.target.provider,
+    )
+
     # Get profile models if provider is set
     profile_models: dict[str, str] = {}
     if effective_provider:
@@ -590,6 +602,8 @@ def resolve_config(
         # Provider
         provider=effective_provider,
         provider_auto_detected=provider_auto_detected,
+        # Target Provider (Phase 19)
+        target_provider=target_provider,
         # Models
         attacker_model=attacker_model,
         judge_model=judge_model,
