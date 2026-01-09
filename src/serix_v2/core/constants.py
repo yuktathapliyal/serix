@@ -77,9 +77,9 @@ PROVIDER_PROFILES: dict[str, dict[str, str]] = {
         "patcher": "gpt-4o",
     },
     "anthropic": {
-        "attacker": "claude-haiku-4-20250514",
-        "critic": "claude-haiku-4-20250514",
-        "analyzer": "claude-haiku-4-20250514",
+        "attacker": "claude-haiku-4-5-20251001",
+        "critic": "claude-haiku-4-5-20251001",
+        "analyzer": "claude-haiku-4-5-20251001",
         "judge": "claude-sonnet-4-20250514",
         "patcher": "claude-sonnet-4-20250514",
     },
@@ -87,14 +87,14 @@ PROVIDER_PROFILES: dict[str, dict[str, str]] = {
         "attacker": "gemini-2.0-flash",
         "critic": "gemini-2.0-flash",
         "analyzer": "gemini-2.0-flash",
-        "judge": "gemini-1.5-pro",
-        "patcher": "gemini-1.5-pro",
+        "judge": "gemini-2.5-pro",
+        "patcher": "gemini-2.5-pro",
     },
 }
 
 PROVIDER_CONSOLE_URLS: dict[str, str] = {
     "openai": "https://platform.openai.com/api-keys",
-    "anthropic": "https://console.anthropic.com/keys",
+    "anthropic": "https://console.anthropic.com/settings/keys",
     "google": "https://aistudio.google.com/apikey",
 }
 
