@@ -26,6 +26,36 @@ console = Console()
 # Maximum validation retries to prevent infinite loops
 MAX_VALIDATION_RETRIES = 3
 
+# Standard serix roles (when all present, just show "serix")
+STANDARD_SERIX_ROLES = {"attacker", "judge", "critic", "patcher", "analyzer"}
+
+
+def _format_roles(req: ProviderRequirement) -> str:
+    """
+    Format roles for display.
+
+    - Target: "(target: func_name)" or just "(target)"
+    - Serix with all 5 standard roles: "(serix)"
+    - Serix with subset: "(serix: role1, role2)"
+    """
+    roles_set = set(req.roles)
+
+    if req.is_target:
+        # Target role
+        if "target" in req.roles and len(req.roles) == 1:
+            return "(target)"
+        # Target with specific function name
+        target_name = next((r for r in req.roles if r != "target"), None)
+        return f"(target: {target_name})" if target_name else "(target)"
+
+    # Serix roles
+    if roles_set == STANDARD_SERIX_ROLES:
+        # All 5 standard roles - simplify to just "serix"
+        return "(serix)"
+    else:
+        # Subset of roles - show which ones
+        return f"(serix: {', '.join(req.roles)})"
+
 
 def render_missing_summary(analysis: CredentialAnalysisResult) -> None:
     """Render summary of MISSING keys (env var not present)."""
@@ -44,28 +74,16 @@ def render_missing_summary(analysis: CredentialAnalysisResult) -> None:
 
     # Show present keys first (with checkmark)
     for req in present:
-        roles_str = ", ".join(req.roles)
-        if req.is_target:
-            roles_str = (
-                f"target: {roles_str}" if "target" not in req.roles else "target"
-            )
-        else:
-            roles_str = f"serix: {roles_str}"
+        roles_str = _format_roles(req)
         lines.append(
-            f"    [{COLOR_SUCCESS}]✓[/{COLOR_SUCCESS}] {req.env_var:<25} found         ({roles_str})"
+            f"    [{COLOR_SUCCESS}]✓[/{COLOR_SUCCESS}] {req.env_var:<25} found         {roles_str}"
         )
 
     # Show missing keys (with X)
     for req in missing:
-        roles_str = ", ".join(req.roles)
-        if req.is_target:
-            roles_str = (
-                f"target: {roles_str}" if "target" not in req.roles else "target"
-            )
-        else:
-            roles_str = f"serix: {roles_str}"
+        roles_str = _format_roles(req)
         lines.append(
-            f"    [{COLOR_ERROR}]✗[/{COLOR_ERROR}] {req.env_var:<25} not found     ({roles_str})"
+            f"    [{COLOR_ERROR}]✗[/{COLOR_ERROR}] {req.env_var:<25} not found     {roles_str}"
         )
 
     lines.append("")
@@ -155,9 +173,9 @@ def render_ci_missing_summary(analysis: CredentialAnalysisResult) -> None:
     console.print()
 
     for req in missing:
-        roles_str = ", ".join(req.roles)
+        roles_str = _format_roles(req)
         console.print(
-            f"    [{COLOR_ERROR}]✗[/{COLOR_ERROR}] {req.env_var:<25} not found     ({roles_str})"
+            f"    [{COLOR_ERROR}]✗[/{COLOR_ERROR}] {req.env_var:<25} not found     {roles_str}"
         )
 
     console.print()
